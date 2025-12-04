@@ -37,8 +37,10 @@ class UnifiedAuthenticationService:
         self._user_name_pattern = re.compile(r'^[a-z0-9._-]+$')
         self.session_duration_days = 30
         
-        # JWT settings
-        self.secret_key = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+        # JWT settings - require env var, no insecure default
+        self.secret_key = os.getenv("JWT_SECRET_KEY")
+        if not self.secret_key:
+            raise ValueError("JWT_SECRET_KEY environment variable is required for security.")
         self.algorithm = "HS256"
         self.token_expiry_hours = 24
         

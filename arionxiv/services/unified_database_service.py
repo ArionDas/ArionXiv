@@ -42,8 +42,10 @@ class UnifiedDatabaseService:
         # Sync operations support
         self.executor = ThreadPoolExecutor(max_workers=2)
         
-        # MongoDB connection string - ensure it has the correct format
-        self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL') or "mongodb+srv://ariondasad:Und3O0QEypfYqawd@arionxiv.cycfdc0.mongodb.net/arionxiv?retryWrites=true&w=majority"
+        # MongoDB connection string - require env var, no hardcoded fallback for security
+        self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL')
+        if not self._db_url:
+            raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
         self.database_name = os.getenv("DATABASE_NAME", "arionxiv")
         
         logger.info("UnifiedDatabaseService initialized")
