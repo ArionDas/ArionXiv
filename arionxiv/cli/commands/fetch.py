@@ -47,11 +47,14 @@ def fetch_command(paper_id: str, save_path: str, extract_text: bool, no_download
 async def _fetch_paper(paper_id: str, save_path: Optional[str], extract_text: bool, no_download: bool):
     """Execute the paper fetch operation"""
     
+    logger.info(f"Fetching paper: {paper_id}, extract_text={extract_text}, no_download={no_download}")
+    
     # Get theme colors for consistent styling
     colors = get_theme_colors()
     
     # Clean up paper ID (remove version suffix if present)
     clean_paper_id = ArxivUtils.normalize_arxiv_id(paper_id)
+    logger.debug(f"Normalized paper ID: {clean_paper_id}")
     
     # Set up progress columns based on download flag
     progress_columns = [
@@ -68,13 +71,16 @@ async def _fetch_paper(paper_id: str, save_path: Optional[str], extract_text: bo
         metadata_task = progress.add_task("Fetching paper metadata...", total=None)
         
         try:
+            logger.debug("Fetching paper metadata from arXiv")
             paper_metadata = arxiv_client.get_paper_by_id(clean_paper_id)
             
             if not paper_metadata:
+                logger.warning(f"Paper not found: {paper_id}")
                 progress.remove_task(metadata_task)
                 console.print(f"Paper not found: {paper_id}", style=colors['error'])
                 return
             
+            logger.info(f"Metadata fetched for: {paper_metadata.get('title', 'Unknown')[:50]}")
             progress.update(metadata_task, description="Metadata fetched")
             progress.remove_task(metadata_task)
             
@@ -82,6 +88,7 @@ async def _fetch_paper(paper_id: str, save_path: Optional[str], extract_text: bo
             _display_paper_info(paper_metadata)
             
             if no_download:
+                logger.debug("Download skipped as requested")
                 console.print("\nMetadata fetch complete (download skipped)", style=colors['primary'])
                 return
             
@@ -97,6 +104,8 @@ async def _fetch_paper(paper_id: str, save_path: Optional[str], extract_text: bo
                 save_path = Path(save_path)
                 save_path.mkdir(parents=True, exist_ok=True)
             
+            logger.debug(f"Save path: {save_path}")
+            
             # Generate filename
             title_clean = "".join(c for c in paper_metadata.get("title", "paper") if c.isalnum() or c in (' ', '-', '_')).rstrip()
             title_clean = title_clean.replace(' ', '_')[:50]  # Limit length
@@ -106,17 +115,20 @@ async def _fetch_paper(paper_id: str, save_path: Optional[str], extract_text: bo
             # Download the PDF
             pdf_url = paper_metadata.get("pdf_url", "")
             if not pdf_url:
+                logger.error("No PDF URL found for paper")
                 progress.remove_task(download_task)
                 console.print("No PDF URL found for this paper", style=colors['error'])
                 return
             
             # Use fetcher to download
+            logger.info(f"Downloading PDF from: {pdf_url}")
             download_result = await arxiv_fetcher.download_paper(clean_paper_id, str(save_path))
             
             progress.update(download_task, completed=100)
             progress.remove_task(download_task)
             
             if not download_result["success"]:
+                logger.error(f"Download failed: {download_result.get('error', 'Unknown error')}")
                 console.print(f"Download failed: {download_result.get('error', 'Unknown error')}", style=colors['error'])
                 return
             

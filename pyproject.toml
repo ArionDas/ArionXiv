@@ -53,6 +53,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "PyPDF2>=3.0.0",
     "pymupdf>=1.23.0",
+    "Pillow>=9.0.0",
     "groq>=0.4.0",
     "google-generativeai>=0.3.0",
     "pydantic-settings>=2.0.0",
@@ -63,6 +64,7 @@ dependencies = [
     "colorama>=0.4.6",
     "numpy>=1.24.0,<2.0.0",
     "APScheduler>=3.10.0",
+    "httpx>=0.24.0",
 ]
 
 [project.optional-dependencies]

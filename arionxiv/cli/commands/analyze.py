@@ -105,12 +105,15 @@ def analyze_command(query: str, analysis_type: str, save_results: bool, use_loca
 async def _analyze_paper(query: str, analysis_type: str, save_results: bool, use_local: bool):
     """Execute the paper analysis - handles both arXiv IDs and natural language queries"""
     
+    logger.info(f"Starting analysis: query='{query}', type={analysis_type}, save={save_results}")
+    
     # Get theme colors for consistent styling
     from ..ui.theme import get_theme_colors
     colors = get_theme_colors()
     
     # Ensure database connection is established before any DB operations
     if unified_database_service.db is None:
+        logger.debug("Connecting to database")
         await unified_database_service.connect_mongodb()
     
     # Determine if query is an arXiv ID or search term
@@ -118,6 +121,7 @@ async def _analyze_paper(query: str, analysis_type: str, save_results: bool, use
     arxiv_id_pattern = r'^\d{4}\.\d{4,5}(v\d+)?$'
     
     if re.match(arxiv_id_pattern, query):
+        logger.debug(f"Query recognized as arXiv ID: {query}")
         # Direct arXiv ID provided
         clean_paper_id = ArxivUtils.normalize_arxiv_id(query)
         paper_metadata = None

@@ -6,11 +6,14 @@ ArionXiv CLI - Terminal-based research paper analysis tool
 import sys
 import os
 import asyncio
+import logging
 from pathlib import Path
 
 # Initialize quiet logging for better UX
 from ..services.unified_config_service import unified_config_service
 unified_config_service.setup_logging()
+
+logger = logging.getLogger(__name__)
 
 import click
 from rich.console import Console
@@ -176,6 +179,7 @@ class ThemedSubGroup(click.Group):
         try:
             return super().invoke(ctx)
         except click.UsageError as e:
+            logger.warning(f"Invalid subcommand: {str(e)}")
             self._show_error(e, ctx)
             raise SystemExit(1)
     
@@ -187,6 +191,7 @@ class ThemedSubGroup(click.Group):
         
         # Get command path for better messaging
         cmd_path = ctx.info_name if ctx else "settings"
+        logger.debug(f"Showing error for command path: {cmd_path}")
         
         error_console.print()
         error_console.print(f"[bold {colors['error']}]⚠ Invalid Command[/bold {colors['error']}]")
@@ -265,6 +270,7 @@ class ThemedGroup(click.Group):
                 subgroup = subcmd
                 parent_cmd = potential_subcmd
         
+        logger.warning(f"Invalid command: {error_msg}")
         error_console.print()
         error_console.print(f"[bold {colors['error']}]⚠ Invalid Command[/bold {colors['error']}]")
         error_console.print(f"[{colors['error']}]{error_msg}[/{colors['error']}]")
@@ -273,6 +279,7 @@ class ThemedGroup(click.Group):
         # Show available commands from the relevant group
         if subgroup and parent_cmd:
             # Show subcommands of the subgroup
+            logger.debug(f"Showing subcommands for: {parent_cmd}")
             error_console.print(f"[bold white]Available '{parent_cmd}' subcommands:[/bold white]")
             for cmd_name in sorted(subgroup.list_commands(ctx)):
                 cmd = subgroup.get_command(ctx, cmd_name)
@@ -283,6 +290,7 @@ class ThemedGroup(click.Group):
             error_console.print(f"Run [{colors['primary']}]arionxiv {parent_cmd} --help[/{colors['primary']}] for more information.")
         else:
             # Show main commands
+            logger.debug("Showing main commands")
             error_console.print(f"[bold white]Available commands:[/bold white]")
             for cmd_name in sorted(self.list_commands(ctx)):
                 cmd = self.get_command(ctx, cmd_name)
@@ -297,6 +305,7 @@ class ThemedGroup(click.Group):
     def main(self, *args, standalone_mode=True, **kwargs):
         """Override main to intercept --help and handle invalid commands"""
         import sys
+        logger.debug(f"CLI invoked with args: {sys.argv[1:]}")
         # Only intercept if --help is the first or second argument (for main group help)
         # Don't intercept if there's a subcommand before --help
         args_list = sys.argv[1:]

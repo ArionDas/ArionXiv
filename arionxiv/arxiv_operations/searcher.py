@@ -45,9 +45,11 @@ class ArxivSearcher:
             Dict with success status and list of papers
         """
         try:
+            logger.info(f"Searching arXiv: query='{query}', max_results={max_results}")
             # Direct search via arXiv API (uses relevance sorting by default)
             papers = self.client.search_papers(query=query, max_results=max_results)
             
+            logger.info(f"Search completed: found {len(papers)} papers")
             return {
                 "success": True,
                 "papers": papers,
@@ -56,7 +58,7 @@ class ArxivSearcher:
             }
             
         except Exception as e:
-            logger.error(f"Search failed: {str(e)}")
+            logger.error(f"Search failed: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e), "papers": []}
     
     async def search_by_category(self, query: str, category: str, max_results: int = 10) -> Dict[str, Any]:
@@ -74,8 +76,10 @@ class ArxivSearcher:
         try:
             # Combine query with category filter
             full_query = f"{query} AND cat:{category}" if query else f"cat:{category}"
+            logger.info(f"Searching by category: query='{full_query}', category={category}")
             papers = self.client.search_papers(query=full_query, max_results=max_results)
             
+            logger.info(f"Category search completed: found {len(papers)} papers in {category}")
             return {
                 "success": True,
                 "papers": papers,
@@ -85,7 +89,7 @@ class ArxivSearcher:
             }
             
         except Exception as e:
-            logger.error(f"Category search failed: {str(e)}")
+            logger.error(f"Category search failed: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e), "papers": []}
     
     async def search_by_author(self, author: str, max_results: int = 10) -> Dict[str, Any]:
@@ -100,8 +104,10 @@ class ArxivSearcher:
             Dict with success status and list of papers
         """
         try:
+            logger.info(f"Searching by author: author='{author}', max_results={max_results}")
             papers = self.client.get_papers_by_author(author=author, max_results=max_results)
             
+            logger.info(f"Author search completed: found {len(papers)} papers by {author}")
             return {
                 "success": True,
                 "papers": papers,
@@ -110,7 +116,7 @@ class ArxivSearcher:
             }
             
         except Exception as e:
-            logger.error(f"Author search failed: {str(e)}")
+            logger.error(f"Author search failed: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e), "papers": []}
     
     def get_available_categories(self) -> Dict[str, str]:

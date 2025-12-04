@@ -2,6 +2,7 @@
 
 import sys
 import asyncio
+import logging
 from pathlib import Path
 
 # Add backend to Python path
@@ -22,6 +23,7 @@ from ...services.unified_user_service import unified_user_service
 from ..utils.command_suggestions import show_command_suggestions
 
 console = create_themed_console()
+logger = logging.getLogger(__name__)
 
 
 @click.command()
