@@ -1,0 +1,70 @@
+# GitHub Actions Workflow for ArionXiv Daily Dose
+# 
+# This workflow runs every hour and triggers daily dose for users
+# who have their scheduled time matching the current hour.
+#
+# SETUP INSTRUCTIONS:
+# 1. Fork this repository to your GitHub account
+# 2. Go to Settings > Secrets and variables > Actions
+# 3. Add the following repository secrets:
+#    - MONGODB_URI: Your MongoDB connection string
+#    - OPENROUTER_API_KEY: Your OpenRouter API key (FREE - primary LLM provider)
+#    - GEMINI_API_KEY: (Optional) For Gemini embeddings
+#    - GROQ_API_KEY: (Optional) Fallback LLM provider
+#
+# The workflow runs hourly and checks which users have their daily dose
+# scheduled for the current hour, then runs their personalized analysis.
+
+name: ArionXiv Daily Dose
+
+on:
+  schedule:
+    # Run every hour at minute 0
+    # GitHub Actions uses UTC timezone
+    - cron: '0 * * * *'
+  
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      force_hour:
+        description: 'Force run for specific hour (0-23, UTC). Leave empty for current hour.'
+        required: false
+        type: string
+
+jobs:
+  daily-dose:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      
+      - name: Run Daily Dose for Scheduled Users
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          RAG_LLM_PROVIDER: ${{ vars.RAG_LLM_PROVIDER || 'openrouter' }}
+          FORCE_HOUR: ${{ github.event.inputs.force_hour }}
+        run: |
+          python -m arionxiv.github_actions_runner
+      
+      - name: Upload logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-dose-logs
+          path: ~/.arionxiv/logs/
+          retention-days: 7

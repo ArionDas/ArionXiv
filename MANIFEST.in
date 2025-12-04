@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include requirements.txt
+include library.json
+recursive-include arionxiv *.py
+recursive-include arionxiv *.json
+prune downloads
+prune logs
+prune venv
+prune tests
+prune scripts
+prune .git
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.egg-info
