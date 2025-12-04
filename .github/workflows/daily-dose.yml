@@ -8,6 +8,7 @@
 # 2. Go to Settings > Secrets and variables > Actions
 # 3. Add the following repository secrets:
 #    - MONGODB_URI: Your MongoDB connection string
+#    - JWT_SECRET_KEY: Your JWT secret key for authentication
 #    - OPENROUTER_API_KEY: Your OpenRouter API key (FREE - primary LLM provider)
 #    - GEMINI_API_KEY: (Optional) For Gemini embeddings
 #    - GROQ_API_KEY: (Optional) Fallback LLM provider
@@ -53,6 +54,7 @@ jobs:
       - name: Run Daily Dose for Scheduled Users
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
