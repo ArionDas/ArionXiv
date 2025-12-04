@@ -2,6 +2,7 @@
 
 import sys
 import asyncio
+import logging
 from pathlib import Path
 
 # Add backend to Python path
@@ -20,6 +21,7 @@ from ..ui.theme import create_themed_console, print_header, style_text, print_su
 from ...services.unified_user_service import unified_user_service
 
 console = create_themed_console()
+logger = logging.getLogger(__name__)
 
 @click.command()
 @click.option('--categories', '-c', is_flag=True, help='Configure preferred categories')

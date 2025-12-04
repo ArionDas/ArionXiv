@@ -32,15 +32,19 @@ class AuthInterface:
     
     def __init__(self):
         self.console = console
+        logger.debug("AuthInterface initialized")
     
     async def ensure_authenticated(self) -> Optional[Dict[str, Any]]:
         """Ensure user is authenticated, prompt if not"""
+        logger.debug("Checking authentication status")
         # Check if already authenticated
         if unified_user_service.is_authenticated():
+            logger.info("User already authenticated")
             return unified_user_service.get_current_user()
         
         # Initialize database connection
         if unified_database_service.db is None:
+            logger.info("Initializing database connection")
             await unified_database_service.connect_mongodb()
         
         # Show authentication prompt
@@ -48,6 +52,7 @@ class AuthInterface:
     
     async def _authentication_flow(self) -> Optional[Dict[str, Any]]:
         """Main authentication flow"""
+        logger.debug("Starting authentication flow")
         self.console.print()
         self.console.print(create_themed_panel(
             "[bold]Welcome to ArionXiv![/bold]\n\n"
@@ -112,14 +117,17 @@ class AuthInterface:
                 
                 # Attempt login
                 self.console.print(f"\n[white]{style_text('Authenticating...', 'primary')}[/white]")
+                logger.info(f"Attempting login for: {identifier}")
                 result = await auth_service.login_user(identifier, password)
                 
                 if result["success"]:
                     user = result["user"]
+                    logger.info(f"Login successful for user: {user['user_name']}")
                     
                     # Create session
                     session_token = unified_user_service.create_session(user)
                     if session_token:
+                        logger.debug("Session created successfully")
                         # Slide effect for successful login!
                         left_to_right_reveal(self.console, f"Welcome back, [bold]{style_text(user['user_name'], 'primary')}![/bold]", duration=1.0)
                         self.console.print()
@@ -128,11 +136,13 @@ class AuthInterface:
                         show_logo_and_features(self.console, animate=False)
                         return user
                     else:
+                        logger.error("Failed to create session after successful login")
                         print_error(self.console, f"{style_text('Failed to create session', 'error')}")
                         return None
                 else:
                     attempts += 1
                     remaining = max_attempts - attempts
+                    logger.warning(f"Login failed for {identifier}: {result.get('message') or result.get('error', 'Unknown')}")
                     print_error(self.console, f"{style_text(result.get('message') or result.get('error', 'Login failed'), 'error')}")
                     
                     if remaining > 0:
@@ -214,14 +224,17 @@ class AuthInterface:
             
             # Attempt registration
             self.console.print(f"\n[white]{style_text('Creating account...', 'primary')}[/white]")
+            logger.info(f"Attempting registration for: {email} ({user_name})")
             result = await auth_service.register_user(email, user_name, password, full_name)
             
             if result["success"]:
                 user = result["user"]
+                logger.info(f"Registration successful for user: {user['user_name']}")
                 
                 # Create session
                 session_token = unified_user_service.create_session(user)
                 if session_token:
+                    logger.debug("Session created for new user")
                     # Shake effect for successful registration!
                     shake_text(self.console, f"Account created! Welcome, {user['user_name']}!")
                     self.console.print()
@@ -230,21 +243,26 @@ class AuthInterface:
                     show_logo_and_features(self.console, animate=False)
                     return user
                 else:
+                    logger.error("Failed to create session for new user")
                     print_error(self.console, style_text("Failed to create session", "error"))
                     return None
             else:
+                logger.warning(f"Registration failed for {email}: {result.get('message') or result.get('error', 'Unknown')}")
                 print_error(self.console, result.get("message") or result.get("error", style_text("Registration failed", "error")))
                 return None
             
         except KeyboardInterrupt:
+            logger.debug("Registration cancelled by user")
             self.console.print(f"\n{style_text('Registration cancelled', 'warning')}")
             return None
         except Exception as e:
+            logger.error(f"Registration error: {str(e)}", exc_info=True)
             print_error(self.console, f"{style_text('Registration error:', 'error')} {str(e)}")
             return None
     
     def show_session_info(self):
         """Show current session information"""
+        logger.debug("Showing session info")
         session_info = unified_user_service.get_session_info()
         
         if session_info:
@@ -266,9 +284,11 @@ class AuthInterface:
         """Logout current user"""
         if unified_user_service.is_authenticated():
             user = unified_user_service.get_current_user()
+            logger.info(f"Logging out user: {user['user_name']}")
             unified_user_service.clear_session()
             left_to_right_reveal(self.console, f"Goodbye, [bold]{style_text(user['user_name'], 'primary')}[/bold]!", duration=1.0)
         else:
+            logger.debug("Logout called but no active session")
             print_warning(self.console, f"{style_text('No active session to logout', 'warning')}")
 
 # Global auth interface instance

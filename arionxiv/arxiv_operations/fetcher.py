@@ -64,16 +64,24 @@ class ArxivFetcher:
             arxiv_id = paper_data.get("arxiv_id")
             pdf_url = paper_data.get("pdf_url")
             
+            logger.info(f"Processing paper: {arxiv_id}")
+            
             if not arxiv_id or not pdf_url:
+                logger.warning(f"Missing arxiv_id or pdf_url for paper")
                 return {"error": "Missing arxiv_id or pdf_url"}
             
             # Fetch PDF
+            logger.debug(f"Fetching PDF from: {pdf_url}")
             pdf_path = await self.fetch_paper_pdf(arxiv_id, pdf_url)
             if not pdf_path:
+                logger.error(f"Failed to download PDF for {arxiv_id}")
                 return {"error": "Failed to download PDF"}
             
             # Process PDF
+            logger.debug(f"Processing PDF: {pdf_path}")
             processing_result = await pdf_processor.process_pdf(pdf_path)
+            
+            logger.info(f"Successfully processed paper: {arxiv_id}")
             
             # Combine paper metadata with processed content
             result = {
@@ -91,6 +99,7 @@ class ArxivFetcher:
     async def batch_fetch_papers(self, papers: list) -> list:
         """Fetch multiple papers concurrently"""
         try:
+            logger.info(f"Starting batch fetch for {len(papers)} papers")
             tasks = []
             for paper in papers:
                 task = self.fetch_and_process_paper(paper)
@@ -110,13 +119,14 @@ class ArxivFetcher:
             successful_results = []
             for result in results:
                 if isinstance(result, Exception):
-                    logger.error(f"Batch fetch error: {str(result)}")
+                    logger.error(f"Batch fetch error: {str(result)}", exc_info=True)
                 else:
                     successful_results.append(result)
             
+            logger.info(f"Batch fetch completed: {len(successful_results)}/{len(papers)} successful")
             return successful_results
         except Exception as e:
-            logger.error(f"Batch fetch error: {str(e)}")
+            logger.error(f"Batch fetch error: {str(e)}", exc_info=True)
             return []
     
     def fetch_paper_sync(self, arxiv_id: str, pdf_url: str) -> Optional[str]:

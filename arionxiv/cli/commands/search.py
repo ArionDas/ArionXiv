@@ -3,6 +3,7 @@
 import sys
 import asyncio
 import subprocess
+import logging
 from pathlib import Path
 
 # Add backend to Python path
@@ -11,6 +12,8 @@ sys.path.insert(0, str(backend_path))
 
 import click
 from rich.console import Console
+
+logger = logging.getLogger(__name__)
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
@@ -65,6 +68,7 @@ def search_command(keywords: Optional[str], category: Optional[str], author: Opt
 async def _search_papers(keywords: str, category: Optional[str], author: Optional[str]):
     """Execute the paper search"""
     
+    logger.info(f"Starting paper search: keywords='{keywords}', category={category}, author={author}")
     left_to_right_reveal(console, f"Search: [{colors['primary']}]{keywords}[/{colors['primary']}]", style="bold", duration=1.0)
     
     with Progress(
@@ -80,25 +84,32 @@ async def _search_papers(keywords: str, category: Optional[str], author: Optiona
         try:
             # Perform search based on filters
             if author:
+                logger.debug(f"Searching by author: {author}")
                 results = await arxiv_searcher.search_by_author(author=author, max_results=10)
             elif category:
+                logger.debug(f"Searching by category: {category}")
                 results = await arxiv_searcher.search_by_category(query=keywords, category=category, max_results=10)
             else:
+                logger.debug(f"Searching by keywords: {keywords}")
                 results = await arxiv_searcher.search(query=keywords, max_results=10)
             
             progress.remove_task(task)
             
             if not results["success"]:
+                logger.error(f"Search failed: {results.get('error', 'Unknown error')}")
                 print_error(console, f"Search failed: {results.get('error', 'Unknown error')}")
                 return
             
             papers = results["papers"]
+            logger.info(f"Search completed: found {len(papers)} papers")
             
             if not papers:
+                logger.warning(f"No papers found for: {keywords}")
                 print_warning(console, f"No papers found for: {keywords}")
                 return
             
         except Exception as e:
+            logger.error(f"Search error: {str(e)}", exc_info=True)
             progress.remove_task(task)
             print_error(console, f"Search error: {str(e)}")
             return

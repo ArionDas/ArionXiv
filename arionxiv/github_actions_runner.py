@@ -98,14 +98,15 @@ async def run_daily_dose_for_user(user_id: str, user_email: str) -> bool:
     try:
         logger.info(f"Running daily dose for user: {user_email}")
         
-        result = await unified_daily_dose_service.generate_daily_dose(user_id)
+        # execute_daily_dose is the correct method name
+        result = await unified_daily_dose_service.execute_daily_dose(user_id)
         
         if result.get("success"):
-            papers_count = len(result.get("papers", []))
+            papers_count = result.get("papers_count", 0)
             logger.info(f"Daily dose completed for {user_email}: {papers_count} papers analyzed")
             return True
         else:
-            error = result.get("error", "Unknown error")
+            error = result.get("message", "Unknown error")
             logger.error(f"Daily dose failed for {user_email}: {error}")
             return False
             
@@ -116,6 +117,7 @@ async def run_daily_dose_for_user(user_id: str, user_email: str) -> bool:
 
 async def main():
     """Main entry point for GitHub Actions runner."""
+    from .services.unified_database_service import unified_database_service
     
     logger.info("=" * 60)
     logger.info("ArionXiv Daily Dose - GitHub Actions Runner")
@@ -149,40 +151,49 @@ async def main():
         logger.info(f"Current time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
         logger.info(f"Processing hour: {current_hour:02d}:00 UTC")
     
-    # Get users scheduled for this hour
-    users = await get_users_for_hour(current_hour)
-    
-    if not users:
-        logger.info(f"No users scheduled for {current_hour:02d}:00 UTC. Exiting.")
-        return
-    
-    # Process each user
-    success_count = 0
-    failure_count = 0
-    
-    for user in users:
-        user_id = str(user["_id"])
-        user_email = user.get("email", "unknown")
+    try:
+        # Get users scheduled for this hour
+        users = await get_users_for_hour(current_hour)
         
-        if await run_daily_dose_for_user(user_id, user_email):
-            success_count += 1
-        else:
-            failure_count += 1
+        if not users:
+            logger.info(f"No users scheduled for {current_hour:02d}:00 UTC. Exiting.")
+            return
         
-        # Small delay between users to avoid rate limiting
-        await asyncio.sleep(2)
+        # Process each user
+        success_count = 0
+        failure_count = 0
+        
+        for user in users:
+            user_id = str(user["_id"])
+            user_email = user.get("email", "unknown")
+            
+            if await run_daily_dose_for_user(user_id, user_email):
+                success_count += 1
+            else:
+                failure_count += 1
+            
+            # Small delay between users to avoid rate limiting
+            await asyncio.sleep(2)
+        
+        # Summary
+        logger.info("=" * 60)
+        logger.info("Daily Dose Run Complete")
+        logger.info(f"  Successful: {success_count}")
+        logger.info(f"  Failed: {failure_count}")
+        logger.info(f"  Total: {len(users)}")
+        logger.info("=" * 60)
+        
+        # Exit with error if any failures
+        if failure_count > 0:
+            sys.exit(1)
     
-    # Summary
-    logger.info("=" * 60)
-    logger.info("Daily Dose Run Complete")
-    logger.info(f"  Successful: {success_count}")
-    logger.info(f"  Failed: {failure_count}")
-    logger.info(f"  Total: {len(users)}")
-    logger.info("=" * 60)
-    
-    # Exit with error if any failures
-    if failure_count > 0:
-        sys.exit(1)
+    finally:
+        # Always cleanup database connection
+        try:
+            await unified_database_service.disconnect()
+            logger.info("Database connection closed")
+        except Exception as e:
+            logger.warning(f"Error closing database connection: {e}")
 
 
 if __name__ == "__main__":
