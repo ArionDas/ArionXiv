@@ -37,14 +37,22 @@ class UnifiedAuthenticationService:
         self._user_name_pattern = re.compile(r'^[a-z0-9._-]+$')
         self.session_duration_days = 30
         
-        # JWT settings - require env var, no insecure default
-        self.secret_key = os.getenv("JWT_SECRET_KEY")
-        if not self.secret_key:
-            raise ValueError("JWT_SECRET_KEY environment variable is required for security.")
+        # JWT settings - lazy loaded to allow module import without env vars
+        # This is needed for GitHub Actions runner which imports the module before setting env vars
+        self._secret_key = None
         self.algorithm = "HS256"
         self.token_expiry_hours = 24
         
         logger.info("UnifiedAuthenticationService initialized")
+    
+    @property
+    def secret_key(self) -> str:
+        """Lazy-load JWT secret key - only required when auth methods are actually called."""
+        if self._secret_key is None:
+            self._secret_key = os.getenv("JWT_SECRET_KEY")
+            if not self._secret_key:
+                raise ValueError("JWT_SECRET_KEY environment variable is required for security.")
+        return self._secret_key
 
     # ============================================================
     # PASSWORD AUTHENTICATION (from auth_service.py)

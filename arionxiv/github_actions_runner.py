@@ -51,7 +51,8 @@ async def get_users_for_hour(hour: int) -> List[Dict[str, Any]]:
         # Time format is "HH:MM", so we match the hour part
         hour_prefix = f"{hour:02d}:"
         
-        users_collection = unified_database_service.get_users_collection()
+        # Access users collection directly via db attribute
+        users_collection = unified_database_service.db.users
         
         # Find users where:
         # 1. Daily dose is enabled

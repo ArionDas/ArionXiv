@@ -42,13 +42,21 @@ class UnifiedDatabaseService:
         # Sync operations support
         self.executor = ThreadPoolExecutor(max_workers=2)
         
-        # MongoDB connection string - require env var, no hardcoded fallback for security
-        self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL')
-        if not self._db_url:
-            raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
+        # MongoDB connection string - lazy loaded to allow module import without env vars
+        # This is needed for GitHub Actions runner which imports the module before setting env vars
+        self._db_url = None
         self.database_name = os.getenv("DATABASE_NAME", "arionxiv")
         
         logger.info("UnifiedDatabaseService initialized")
+    
+    @property
+    def db_url(self) -> str:
+        """Lazy-load MongoDB URL - only required when database methods are actually called."""
+        if self._db_url is None:
+            self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL')
+            if not self._db_url:
+                raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
+        return self._db_url
     
     # ============================================================
     # CONNECTION MANAGEMENT (from database_client.py)
@@ -68,13 +76,13 @@ class UnifiedDatabaseService:
             
             logger.info(f"Connection timeout: {connection_params['connectTimeoutMS']}ms")
             
-            # For MongoDB Atlas (mongodb+srv://)
-            if 'mongodb+srv://' in self._db_url:
+            # For MongoDB Atlas (mongodb+srv://) - use property to trigger lazy load
+            if 'mongodb+srv://' in self.db_url:
                 logger.info("Connecting to MongoDB Atlas cluster...")
-                self.mongodb_client = AsyncIOMotorClient(self._db_url, **connection_params)
+                self.mongodb_client = AsyncIOMotorClient(self.db_url, **connection_params)
             else:
                 logger.info("Connecting to MongoDB instance...")
-                self.mongodb_client = AsyncIOMotorClient(self._db_url, **connection_params)
+                self.mongodb_client = AsyncIOMotorClient(self.db_url, **connection_params)
             
             # Set database
             self.db = self.mongodb_client[self.database_name]
@@ -1239,7 +1247,7 @@ class UnifiedDatabaseService:
         async def save_operation():
             if self.db is None:
                 # Create separate client for sync operations
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1281,7 +1289,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for save_paper_embeddings"""
         async def save_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1329,7 +1337,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for save_chat_session"""
         async def save_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1372,7 +1380,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for load_chat_session"""
         async def load_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1407,7 +1415,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for clear_chat_session"""
         async def clear_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1434,7 +1442,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for get_paper_embeddings"""
         async def get_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1469,7 +1477,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for save_user_paper"""
         async def save_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1516,7 +1524,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for get_user_papers"""
         async def get_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
@@ -1551,7 +1559,7 @@ class UnifiedDatabaseService:
         """Synchronous wrapper for get_user_paper_categories"""
         async def get_operation():
             if self.db is None:
-                client = AsyncIOMotorClient(self._db_url)
+                client = AsyncIOMotorClient(self.db_url)
                 db = client[self.database_name]
             else:
                 db = self.db
