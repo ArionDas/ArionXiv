@@ -596,12 +596,19 @@ async def send_chat_message(
         # Get or create session
         session_id = request.session_id
         if not session_id:
-            # Create a new session
-            session_result = await create_chat_session(
-                ChatSessionRequest(paper_id=arxiv_id),
-                current_user
-            )
-            session_id = session_result.get("session_id")
+            session_data = {
+                "user_name": user_name,
+                "arxiv_id": arxiv_id,
+                "title": f"Chat about {arxiv_id}",
+                "created_at": datetime.utcnow(),
+                "last_activity": datetime.utcnow(),
+                "messages": [],
+                "is_active": True
+            }
+            result = await unified_database_service.insert_one("chat_sessions", session_data)
+            session_id = str(result.inserted_id) if result and getattr(result, 'inserted_id', None) else None
+            if not session_id:
+                raise HTTPException(status_code=500, detail="Failed to create session")
         
         # Get RAG response
         response_data = await rag_chat_system.chat(

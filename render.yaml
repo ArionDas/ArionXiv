@@ -10,7 +10,7 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET_KEY
-        generateValue: true
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: GROQ_API_KEY
