@@ -71,50 +71,94 @@ class UnifiedAnalysisService:
     """
     
     def __init__(self):
-        # Enhanced configuration - Load from config service
-        self.analysis_config = unified_config_service.get_analysis_config()
-        self.embedding_config = unified_config_service.get_embedding_config()
-        self.rag_config = unified_config_service.get_rag_config()
-        
-        # Analysis configuration
-        self.batch_size = self.analysis_config["batch_size"]
-        self.timeout_seconds = self.analysis_config["timeout_seconds"]
-        
-        # Initialize OpenRouter client if available
-        self.openrouter_client = None
-        if OPENROUTER_AVAILABLE:
-            try:
-                self.openrouter_client = get_openrouter_client()
-                if self.openrouter_client.is_available:
-                    logger.info(f"OpenRouter client initialized with model: {self.openrouter_client.get_model_name()}")
-                else:
-                    logger.info("OpenRouter client not configured (no API key)")
-                    self.openrouter_client = None
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenRouter client: {str(e)}")
-                self.openrouter_client = None
-        
-        # Initialize RAG system with both LLM clients
-        self.rag = BasicRAG(
-            database_service=unified_database_service,
-            config_service=unified_config_service,
-            llm_client=llm_client,
-            openrouter_client=self.openrouter_client
-        )
+        # Lazy initialization flags
+        self._rag = None
+        self._rag_initialized = False
+        self._openrouter_client = None
+        self._openrouter_checked = False
+        self._console = None
+        self._get_theme_colors = None
         
         # Analysis orchestrator functionality
         self.analysis_orchestrator_enabled = True
         
-        # Create console for chat interface
-        try:
-            from cli.ui.theme_system import create_themed_console, get_theme_colors
-            self.console = create_themed_console()
-            self._get_theme_colors = get_theme_colors
-        except ImportError:
-            self.console = Console()
-            self._get_theme_colors = lambda: {'primary': 'blue', 'secondary': 'cyan'}
-        
-        logger.info(f"UnifiedAnalysisService initialized with BasicRAG (ML available: {ML_DEPENDENCIES_AVAILABLE})")
+        logger.info("UnifiedAnalysisService initialized (lazy loading enabled)")
+    
+    @property
+    def analysis_config(self):
+        """Lazy load analysis config"""
+        return unified_config_service.get_analysis_config()
+    
+    @property
+    def embedding_config(self):
+        """Lazy load embedding config"""
+        return unified_config_service.get_embedding_config()
+    
+    @property
+    def rag_config(self):
+        """Lazy load RAG config"""
+        return unified_config_service.get_rag_config()
+    
+    @property
+    def batch_size(self):
+        """Get batch size from config"""
+        return self.analysis_config["batch_size"]
+    
+    @property
+    def timeout_seconds(self):
+        """Get timeout from config"""
+        return self.analysis_config["timeout_seconds"]
+    
+    @property
+    def openrouter_client(self):
+        """Lazy initialize OpenRouter client"""
+        if not self._openrouter_checked:
+            self._openrouter_checked = True
+            if OPENROUTER_AVAILABLE:
+                try:
+                    self._openrouter_client = get_openrouter_client()
+                    if self._openrouter_client and self._openrouter_client.is_available:
+                        logger.info(f"OpenRouter client initialized with model: {self._openrouter_client.get_model_name()}")
+                    else:
+                        logger.info("OpenRouter client not configured (no API key)")
+                        self._openrouter_client = None
+                except Exception as e:
+                    logger.warning(f"Failed to initialize OpenRouter client: {str(e)}")
+                    self._openrouter_client = None
+        return self._openrouter_client
+    
+    @openrouter_client.setter
+    def openrouter_client(self, value):
+        """Allow setting OpenRouter client"""
+        self._openrouter_client = value
+        self._openrouter_checked = True
+    
+    @property
+    def rag(self):
+        """Lazy initialize RAG system"""
+        if not self._rag_initialized:
+            self._rag_initialized = True
+            self._rag = BasicRAG(
+                database_service=unified_database_service,
+                config_service=unified_config_service,
+                llm_client=llm_client,
+                openrouter_client=self.openrouter_client
+            )
+            logger.info(f"BasicRAG initialized (ML available: {ML_DEPENDENCIES_AVAILABLE})")
+        return self._rag
+    
+    @property
+    def console(self):
+        """Lazy initialize console"""
+        if self._console is None:
+            try:
+                from cli.ui.theme_system import create_themed_console, get_theme_colors
+                self._console = create_themed_console()
+                self._get_theme_colors = get_theme_colors
+            except ImportError:
+                self._console = Console()
+                self._get_theme_colors = lambda: {'primary': 'blue', 'secondary': 'cyan'}
+        return self._console
 
     
     # ====================

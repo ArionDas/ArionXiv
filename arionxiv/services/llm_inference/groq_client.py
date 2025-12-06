@@ -5,7 +5,6 @@ import logging
 import json
 import asyncio
 import os
-import hashlib
 from datetime import datetime, timedelta
 from functools import lru_cache
 import time
@@ -16,6 +15,7 @@ from rich.console import Console
 
 ## File imports
 from ...prompts import format_prompt
+from .llm_utils import parse_json_response, generate_cache_key, generate_paper_cache_key, format_paper_metadata
 
 load_dotenv()
 
@@ -60,13 +60,15 @@ class GroqClient:
             cache_ttl_hours: Time-to-live for cache entries in hours (default: 24)
             console: Rich console for output (optional)
         """
-        # API configuration
-        self.api_key = os.getenv("GROQ_API_KEY")
+        # API configuration - lazy loaded
+        self._api_key = None
+        self._api_key_checked = False
         self.model = os.getenv("DEFAULT_ANALYSIS_MODEL", "llama-3.3-70b-versatile")
         self.timeout = 60
         self._console = console or Console()
         
         # Concurrency control
+        self._max_concurrent_requests = max_concurrent_requests
         self.semaphore = asyncio.Semaphore(max_concurrent_requests)
         self.max_retries = 3
         
@@ -83,32 +85,35 @@ class GroqClient:
         self.total_cache_hits = 0
         self.total_errors = 0
         
-        # Client initialization
-        self.client = None
-        
-        # Initialize Groq client if API key is available
-        if self.api_key:
-            try:
-                # Configure with connection pooling and proper timeouts
-                self.client = AsyncGroq(
-                    api_key=self.api_key,
-                    max_retries=2,
-                    timeout=httpx.Timeout(60.0, connect=5.0)
-                )
-                logger.info(
-                    "Groq client initialized",
-                    extra={
-                        "model": self.model,
-                        "max_concurrent": max_concurrent_requests,
-                        "cache_enabled": enable_cache
-                    }
-                )
-            except Exception as e:
-                logger.error("Failed to initialize Groq client", extra={"error": str(e)})
-                self.client = None
-        else:
-            logger.warning("No GROQ_API_KEY found in environment - Groq features will be unavailable")
-            self.client = None
+        # Client initialization - lazy loaded
+        self._client = None
+        self._client_initialized = False
+    
+    @property
+    def api_key(self):
+        """Lazy load API key"""
+        if not self._api_key_checked:
+            self._api_key = os.getenv("GROQ_API_KEY")
+            self._api_key_checked = True
+        return self._api_key
+    
+    @property
+    def client(self):
+        """Lazy initialize Groq client"""
+        if not self._client_initialized:
+            self._client_initialized = True
+            if self.api_key:
+                try:
+                    self._client = AsyncGroq(
+                        api_key=self.api_key,
+                        max_retries=2,
+                        timeout=httpx.Timeout(60.0, connect=5.0)
+                    )
+                    logger.debug("Groq client initialized", extra={"model": self.model})
+                except Exception as e:
+                    logger.error("Failed to initialize Groq client", extra={"error": str(e)})
+                    self._client = None
+        return self._client
     
     @property
     def is_available(self) -> bool:
@@ -150,43 +155,16 @@ class GroqClient:
         await self.__aexit__(None, None, None)
     
     def _generate_cache_key(self, content: str, prompt_type: str) -> str:
-        """Generate cache key from content and prompt type"""
-        cache_input = f"{prompt_type}:{content[:500]}"
-        return hashlib.md5(cache_input.encode()).hexdigest()
+        """Generate cache key from content and prompt type - delegates to shared utility"""
+        return generate_cache_key(content, prompt_type)
     
     def _generate_paper_cache_key(self, paper: Dict[str, Any]) -> str:
-        """Generate unique cache key for a paper using stable identifiers"""
-        paper_id = paper.get('arxiv_id') or paper.get('doi') or paper.get('id')
-        
-        if not paper_id:
-            title = paper.get('title', 'Unknown')
-            authors = paper.get('authors', [])
-            if authors and len(authors) > 0:
-                first_author = authors[0] if isinstance(authors, list) else str(authors)
-                paper_id = f"{title}:{first_author}"
-            else:
-                paper_id = title
-        
-        return str(paper_id)
+        """Generate unique cache key for a paper - delegates to shared utility"""
+        return generate_paper_cache_key(paper)
     
     def _format_paper_metadata(self, paper: Dict[str, Any], index: Optional[int] = None) -> str:
-        """Format paper metadata into a standardized string"""
-        title = paper.get('title', 'Unknown')
-        abstract = paper.get('abstract', 'No abstract available')
-        categories = paper.get('categories', [])
-        authors = paper.get('authors', [])
-        
-        cat_str = ', '.join(categories[:3]) if categories else 'N/A'
-        author_count = len(authors) if isinstance(authors, list) else 0
-        
-        prefix = f"Paper {index}: " if index is not None else ""
-        
-        return (
-            f"{prefix}{title}\n"
-            f"Categories: {cat_str}\n"
-            f"Authors: {author_count} author(s)\n"
-            f"Abstract: {abstract}"
-        )
+        """Format paper metadata - delegates to shared utility"""
+        return format_paper_metadata(paper, index)
     
     async def _get_from_cache(self, cache_key: str) -> Optional[Any]:
         """Retrieve result from cache if available and not expired"""
@@ -224,74 +202,8 @@ class GroqClient:
                 self.cache[cache_key] = (result, datetime.now())
     
     def _parse_json_response(self, response_content: str, max_retries: int = 3) -> Dict[str, Any]:
-        """Parse JSON response with retry logic and fallback handling"""
-        original_content = response_content
-        
-        for attempt in range(max_retries):
-            try:
-                clean_content = response_content.strip()
-                
-                # Remove markdown code blocks
-                if clean_content.startswith("```"):
-                    lines = clean_content.split("\n")
-                    start_idx = 0
-                    end_idx = len(lines)
-                    for i, line in enumerate(lines):
-                        if line.strip().startswith("```") and i == 0:
-                            start_idx = 1
-                        elif line.strip() == "```":
-                            end_idx = i
-                            break
-                    clean_content = "\n".join(lines[start_idx:end_idx]).strip()
-                    if clean_content.startswith("json"):
-                        clean_content = clean_content[4:].strip()
-                
-                try:
-                    parsed_result = json.loads(clean_content)
-                except json.JSONDecodeError:
-                    import re
-                    json_match = re.search(r'\{[\s\S]*\}', clean_content)
-                    if json_match:
-                        clean_content = json_match.group(0)
-                    parsed_result = json.loads(clean_content)
-                
-                return parsed_result
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON parsing attempt {attempt + 1} failed: {str(e)}")
-                
-                if attempt < max_retries - 1:
-                    import re
-                    nested_match = re.search(r'\{["\'](?:summary|analysis)["\'][\s]*:', original_content)
-                    if nested_match:
-                        start = nested_match.start()
-                        brace_count = 0
-                        for i, char in enumerate(original_content[start:]):
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    response_content = original_content[start:start + i + 1]
-                                    break
-                    else:
-                        response_content = original_content.strip().strip('`').strip()
-                    continue
-        
-        # Fallback response
-        logger.error("JSON parsing failed after all retries")
-        raw_text = original_content.strip().replace("```json", "").replace("```", "").strip()
-        
-        return {
-            "summary": raw_text[:1000] if len(raw_text) > 100 else "Analysis completed but could not be formatted properly.",
-            "raw_response": original_content[:2000],
-            "error": "JSON decode failed - displaying raw analysis",
-            "key_findings": ["See summary for analysis details"],
-            "methodology": "",
-            "strengths": [],
-            "limitations": [],
-            "confidence_score": 0.5
-        }
+        """Parse JSON response - delegates to shared utility"""
+        return parse_json_response(response_content, max_retries)
     
     async def _api_call_with_retry(
         self, 

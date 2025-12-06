@@ -5,6 +5,9 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+# Import shared utility
+from ..services.llm_inference.llm_utils import sanitize_arxiv_id as _sanitize_arxiv_id
+
 logger = logging.getLogger(__name__)
 
 class ArxivUtils:
@@ -20,28 +23,13 @@ class ArxivUtils:
             '2502.03095v7' -> '2502.03095'
             '2502.03095' -> '2502.03095'
         """
-        if not arxiv_id:
-            return arxiv_id
-        # Remove version suffix (v1, v2, ..., v99)
-        return re.sub(r'v\d+$', '', arxiv_id.strip())
+        # Use shared utility with remove_version=True
+        return _sanitize_arxiv_id(arxiv_id, remove_version=True) if arxiv_id else arxiv_id
     
     @staticmethod
     def clean_arxiv_id(arxiv_id: str) -> str:
-        """Clean and normalize Arxiv ID"""
-        try:
-            # Remove common prefixes and clean
-            cleaned = arxiv_id.replace("http://arxiv.org/abs/", "")
-            cleaned = cleaned.replace("https://arxiv.org/abs/", "")
-            cleaned = cleaned.replace("arxiv:", "")
-            
-            # Extract just the ID part
-            if "/" in cleaned:
-                cleaned = cleaned.split("/")[-1]
-            
-            return cleaned.strip()
-        except Exception as e:
-            logger.error(f"Error cleaning arxiv ID {arxiv_id}: {str(e)}")
-            return arxiv_id
+        """Clean and normalize Arxiv ID - delegates to shared utility"""
+        return _sanitize_arxiv_id(arxiv_id) if arxiv_id else arxiv_id
     
     @staticmethod
     def extract_arxiv_id_from_url(url: str) -> Optional[str]:

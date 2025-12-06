@@ -179,7 +179,6 @@ class ThemedSubGroup(click.Group):
         try:
             return super().invoke(ctx)
         except click.UsageError as e:
-            logger.warning(f"Invalid subcommand: {str(e)}")
             self._show_error(e, ctx)
             raise SystemExit(1)
     
@@ -270,7 +269,6 @@ class ThemedGroup(click.Group):
                 subgroup = subcmd
                 parent_cmd = potential_subcmd
         
-        logger.warning(f"Invalid command: {error_msg}")
         error_console.print()
         error_console.print(f"[bold {colors['error']}]⚠ Invalid Command[/bold {colors['error']}]")
         error_console.print(f"[{colors['error']}]{error_msg}[/{colors['error']}]")

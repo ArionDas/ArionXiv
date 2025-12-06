@@ -16,26 +16,35 @@ class UnifiedLLMService:
     """Client for LLM-based paper analysis using Groq"""
     
     def __init__(self):
-        # Groq LLM configuration
-        self.api_key = os.getenv("GROQ_API_KEY")
+        # Groq LLM configuration - lazy loaded
+        self._api_key = None
+        self._api_key_checked = False
         self.model = os.getenv("DEFAULT_ANALYSIS_MODEL", "llama-3.3-70b-versatile")
         self.timeout = 60
-        self.client = None
-        
-        # Initialize Groq client if API key is available
-        if self.api_key:
-            try:
-                # Use the updated Groq client
-                self.client = AsyncGroq(
-                    api_key=self.api_key
-                )
-                logger.debug("Groq LLM client initialized", extra={"model": self.model})
-            except Exception as e:
-                logger.error(f"Failed to initialize Groq client: {e}")
-                self.client = None
-        else:
-            logger.warning("No GROQ_API_KEY found in environment - LLM features will be unavailable")
-            self.client = None
+        self._client = None
+        self._client_initialized = False
+    
+    @property
+    def api_key(self):
+        """Lazy load API key"""
+        if not self._api_key_checked:
+            self._api_key = os.getenv("GROQ_API_KEY")
+            self._api_key_checked = True
+        return self._api_key
+    
+    @property
+    def client(self):
+        """Lazy initialize Groq client"""
+        if not self._client_initialized:
+            self._client_initialized = True
+            if self.api_key:
+                try:
+                    self._client = AsyncGroq(api_key=self.api_key)
+                    logger.debug("Groq LLM client initialized", extra={"model": self.model})
+                except Exception as e:
+                    logger.error(f"Failed to initialize Groq client: {e}")
+                    self._client = None
+        return self._client
     
     async def analyze_paper(self, content: str) -> Dict[str, Any]:
         """Analyze a single paper using Groq LLM"""

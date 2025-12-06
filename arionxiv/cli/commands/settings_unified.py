@@ -45,10 +45,48 @@ except ImportError:
 console = create_themed_console()
 
 # ================================
+# CUSTOM ERROR HANDLING FOR SETTINGS
+# ================================
+
+class SettingsGroup(click.Group):
+    """Custom Click group for settings with proper error handling for invalid subcommands"""
+    
+    def invoke(self, ctx):
+        """Override invoke to catch errors from subcommands"""
+        try:
+            return super().invoke(ctx)
+        except click.UsageError as e:
+            self._show_error(e, ctx)
+            raise SystemExit(1)
+    
+    def _show_error(self, error, ctx):
+        """Display themed error message for invalid subcommands"""
+        colors = get_theme_colors()
+        error_console = Console()
+        error_msg = str(error)
+        
+        error_console.print()
+        error_console.print(f"[bold {colors['error']}]⚠ Invalid Settings Command[/bold {colors['error']}]")
+        error_console.print(f"[{colors['error']}]{error_msg}[/{colors['error']}]")
+        error_console.print()
+        
+        # Show available subcommands
+        error_console.print(f"[bold white]Available 'settings' subcommands:[/bold white]")
+        for cmd_name in sorted(self.list_commands(ctx)):
+            cmd = self.get_command(ctx, cmd_name)
+            if cmd and not cmd.hidden:
+                help_text = cmd.get_short_help_str(limit=50)
+                error_console.print(f"  [{colors['primary']}]{cmd_name}[/{colors['primary']}]  {help_text}")
+        
+        error_console.print()
+        error_console.print(f"Run [{colors['primary']}]arionxiv settings --help[/{colors['primary']}] for more information.")
+        error_console.print()
+
+# ================================
 # MAIN SETTINGS COMMAND
 # ================================
 
-@click.group()
+@click.group(cls=SettingsGroup)
 def settings():
     """
     ArionXiv Settings - Configure your research experience
