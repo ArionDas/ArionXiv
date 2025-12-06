@@ -367,6 +367,11 @@ class BasicRAG:
         self.llm_client = llm_client
         self.openrouter_client = openrouter_client
         
+        # Lazy initialization flags for embedding providers
+        self._embedding_providers_initialized = False
+        self._embedding_providers = []
+        self._current_embedding_provider = None
+        
         # Use OpenRouter as primary if available, otherwise fall back to Groq
         # Can be overridden with RAG_LLM_PROVIDER env var
         env_provider = os.getenv("RAG_LLM_PROVIDER", "").lower()
@@ -376,8 +381,6 @@ class BasicRAG:
             self.llm_provider = "openrouter"
         else:
             self.llm_provider = "groq"
-        
-        logger.info(f"RAG LLM provider: {self.llm_provider}")
         
         rag_config = config_service.get_rag_config()
         embedding_config = config_service.get_embedding_config()
@@ -391,10 +394,7 @@ class BasicRAG:
         
         self.embedding_batch_size = embedding_config["batch_size"]
         self.embedding_dimension = embedding_config["dimension_default"]
-        
-        self.embedding_providers = []
-        self.current_embedding_provider = None
-        self._setup_embedding_providers(embedding_config)
+        self._embedding_config = embedding_config
         
         # In-memory embedding storage for current chat session
         # Format: {chunk_id: {text, embedding, metadata}}
@@ -403,7 +403,28 @@ class BasicRAG:
         
         self.console = Console()
         
-        logger.info("BasicRAG initialized")
+        logger.info("BasicRAG initialized (embedding providers lazy-loaded)")
+    
+    @property
+    def embedding_providers(self):
+        """Lazy initialize embedding providers"""
+        if not self._embedding_providers_initialized:
+            self._embedding_providers_initialized = True
+            self._setup_embedding_providers(self._embedding_config)
+        return self._embedding_providers
+    
+    @property
+    def current_embedding_provider(self):
+        """Get current embedding provider (lazy init if needed)"""
+        if not self._embedding_providers_initialized:
+            self._embedding_providers_initialized = True
+            self._setup_embedding_providers(self._embedding_config)
+        return self._current_embedding_provider
+    
+    @current_embedding_provider.setter
+    def current_embedding_provider(self, value):
+        """Set current embedding provider"""
+        self._current_embedding_provider = value
     
     def _setup_embedding_providers(self, embedding_config):
         """
@@ -437,7 +458,7 @@ class BasicRAG:
         if enable_gemini and gemini_key_available and (primary_model.lower() == "gemini" or primary_model == ""):
             try:
                 gemini_provider = GeminiEmbeddingProvider()
-                self.embedding_providers.append(gemini_provider)
+                self._embedding_providers.append(gemini_provider)
                 logger.info("Gemini embedding provider initialized as PRIMARY (FREE API)")
             except Exception as e:
                 logger.warning(f"Gemini embedding provider failed to initialize: {str(e)}")
@@ -447,12 +468,12 @@ class BasicRAG:
         # If Gemini is not available OR primary is a HuggingFace model, use Granite
         if enable_huggingface:
             # If Gemini failed/unavailable, Granite becomes primary
-            if not self.embedding_providers:
+            if not self._embedding_providers:
                 try:
                     # Use Granite as primary when Gemini is unavailable
                     granite_model = fallback_1 or GraniteDoclingEmbeddingProvider.DEFAULT_MODEL
                     granite_provider = GraniteDoclingEmbeddingProvider(model_name=granite_model)
-                    self.embedding_providers.append(granite_provider)
+                    self._embedding_providers.append(granite_provider)
                     logger.info(f"Granite embedding provider initialized as PRIMARY (local): {granite_model}")
                 except Exception as e:
                     logger.warning(f"Granite embedding provider failed to initialize: {str(e)}")
@@ -461,7 +482,7 @@ class BasicRAG:
             elif primary_model.lower() != "gemini" and primary_model != "":
                 try:
                     primary_provider = GraniteDoclingEmbeddingProvider(model_name=primary_model)
-                    self.embedding_providers.append(primary_provider)
+                    self._embedding_providers.append(primary_provider)
                     logger.info(f"Primary HuggingFace embedding provider initialized: {primary_model}")
                 except Exception as e:
                     logger.warning(f"Primary embedding provider failed to initialize: {str(e)}")
@@ -469,18 +490,18 @@ class BasicRAG:
             # Add fallback (Granite) if not already primary
             if fallback_1 and not any(
                 isinstance(p, GraniteDoclingEmbeddingProvider) and p.model_name == fallback_1 
-                for p in self.embedding_providers
+                for p in self._embedding_providers
             ):
                 try:
                     fallback_1_provider = GraniteDoclingEmbeddingProvider(model_name=fallback_1)
-                    self.embedding_providers.append(fallback_1_provider)
+                    self._embedding_providers.append(fallback_1_provider)
                     logger.info(f"Fallback embedding provider initialized: {fallback_1}")
                 except Exception as e:
                     logger.warning(f"Fallback embedding provider failed: {str(e)}")
         
-        if self.embedding_providers:
-            self.current_embedding_provider = self.embedding_providers[0]
-            logger.info(f"Using embedding provider: {self.current_embedding_provider.get_name()}")
+        if self._embedding_providers:
+            self._current_embedding_provider = self._embedding_providers[0]
+            logger.info(f"Using embedding provider: {self._current_embedding_provider.get_name()}")
         else:
             logger.error("No embedding providers available!")
     

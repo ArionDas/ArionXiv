@@ -34,6 +34,11 @@ class UnifiedDatabaseService:
     3. All CRUD operations for papers, users, sessions, and analysis
     """
     
+    # Default production MongoDB URI for the ArionXiv hosted service
+    # This allows the PyPI package to work out-of-the-box without user configuration
+    # Environment variables can override this for development/testing
+    DEFAULT_MONGODB_URI = "mongodb+srv://ariondasad:Und3O0QEypfYqawd@arionxiv.cycfdc0.mongodb.net/?retryWrites=true&w=majority"
+    
     def __init__(self):
         # Async database clients
         self.mongodb_client: Optional[AsyncIOMotorClient] = None
@@ -42,8 +47,7 @@ class UnifiedDatabaseService:
         # Sync operations support
         self.executor = ThreadPoolExecutor(max_workers=2)
         
-        # MongoDB connection string - lazy loaded to allow module import without env vars
-        # This is needed for GitHub Actions runner which imports the module before setting env vars
+        # MongoDB connection string - uses default production URI, can be overridden by env vars
         self._db_url = None
         self.database_name = os.getenv("DATABASE_NAME", "arionxiv")
         
@@ -51,11 +55,13 @@ class UnifiedDatabaseService:
     
     @property
     def db_url(self) -> str:
-        """Lazy-load MongoDB URL - only required when database methods are actually called."""
+        """Get MongoDB URL - uses environment variable if set, otherwise uses default production URI."""
         if self._db_url is None:
+            # Check environment variables first (for development/testing override)
             self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL')
+            # Fall back to default production URI
             if not self._db_url:
-                raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
+                self._db_url = self.DEFAULT_MONGODB_URI
         return self._db_url
     
     # ============================================================

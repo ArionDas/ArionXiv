@@ -7,12 +7,13 @@ import logging
 import json
 import asyncio
 import os
-import hashlib
 from datetime import datetime, timedelta
 import time
 import httpx
 from rich.console import Console
 from dotenv import load_dotenv
+
+from .llm_utils import parse_json_response, generate_cache_key
 
 load_dotenv()
 
@@ -102,8 +103,9 @@ class OpenRouterClient:
             console: Rich console for output (optional)
             model: Model to use (default: moonshotai/kimi-k2:free)
         """
-        # API configuration
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        # API configuration - lazy loaded
+        self._api_key = None
+        self._api_key_checked = False
         self.model = model or os.getenv("OPENROUTER_MODEL", self.DEFAULT_MODEL)
         self.timeout = 120  # Longer timeout for free models
         self._console = console or Console()
@@ -131,19 +133,14 @@ class OpenRouterClient:
         
         # HTTP client for API calls
         self._http_client: Optional[httpx.AsyncClient] = None
-        
-        # Validate API key
-        if self.api_key:
-            logger.info(
-                "OpenRouter client initialized",
-                extra={
-                    "model": self.model,
-                    "max_concurrent": max_concurrent_requests,
-                    "cache_enabled": enable_cache
-                }
-            )
-        else:
-            logger.warning("No OPENROUTER_API_KEY found - OpenRouter features will be unavailable")
+    
+    @property
+    def api_key(self):
+        """Lazy load API key"""
+        if not self._api_key_checked:
+            self._api_key = os.getenv("OPENROUTER_API_KEY")
+            self._api_key_checked = True
+        return self._api_key
     
     @property
     def is_available(self) -> bool:
@@ -198,9 +195,8 @@ class OpenRouterClient:
         await self.__aexit__(None, None, None)
     
     def _generate_cache_key(self, content: str, prompt_type: str) -> str:
-        """Generate cache key from content and prompt type"""
-        cache_input = f"{prompt_type}:{self.model}:{content[:500]}"
-        return hashlib.md5(cache_input.encode()).hexdigest()
+        """Generate cache key - delegates to shared utility"""
+        return generate_cache_key(content, prompt_type, self.model)
     
     async def _get_from_cache(self, cache_key: str) -> Optional[Any]:
         """Retrieve result from cache if available and not expired"""
@@ -238,72 +234,8 @@ class OpenRouterClient:
                 self.cache[cache_key] = (result, datetime.now())
     
     def _parse_json_response(self, response_content: str, max_retries: int = 3) -> Dict[str, Any]:
-        """Parse JSON response with retry logic and fallback handling"""
-        original_content = response_content
-        
-        for attempt in range(max_retries):
-            try:
-                clean_content = response_content.strip()
-                
-                # Remove markdown code blocks
-                if clean_content.startswith("```"):
-                    lines = clean_content.split("\n")
-                    start_idx = 0
-                    end_idx = len(lines)
-                    for i, line in enumerate(lines):
-                        if line.strip().startswith("```") and i == 0:
-                            start_idx = 1
-                        elif line.strip() == "```":
-                            end_idx = i
-                            break
-                    clean_content = "\n".join(lines[start_idx:end_idx]).strip()
-                    if clean_content.startswith("json"):
-                        clean_content = clean_content[4:].strip()
-                
-                try:
-                    return json.loads(clean_content)
-                except json.JSONDecodeError:
-                    import re
-                    json_match = re.search(r'\{[\s\S]*\}', clean_content)
-                    if json_match:
-                        clean_content = json_match.group(0)
-                    return json.loads(clean_content)
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON parsing attempt {attempt + 1} failed: {str(e)}")
-                
-                if attempt < max_retries - 1:
-                    import re
-                    nested_match = re.search(r'\{["\'](?:summary|analysis)["\'][\s]*:', original_content)
-                    if nested_match:
-                        start = nested_match.start()
-                        brace_count = 0
-                        for i, char in enumerate(original_content[start:]):
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    response_content = original_content[start:start + i + 1]
-                                    break
-                    else:
-                        response_content = original_content.strip().strip('`').strip()
-                    continue
-        
-        # Fallback response
-        logger.error("JSON parsing failed after all retries")
-        raw_text = original_content.strip().replace("```json", "").replace("```", "").strip()
-        
-        return {
-            "summary": raw_text[:1000] if len(raw_text) > 100 else "Analysis completed but could not be formatted properly.",
-            "raw_response": original_content[:2000],
-            "error": "JSON decode failed - displaying raw analysis",
-            "key_findings": ["See summary for analysis details"],
-            "methodology": "",
-            "strengths": [],
-            "limitations": [],
-            "confidence_score": 0.5
-        }
+        """Parse JSON response - delegates to shared utility"""
+        return parse_json_response(response_content, max_retries)
     
     async def _api_call_with_retry(
         self, 

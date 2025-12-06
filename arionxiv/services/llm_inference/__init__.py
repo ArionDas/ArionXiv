@@ -15,6 +15,16 @@ Usage:
     result = await openrouter_client.chat(message, context)
 """
 
+# Shared utilities
+from .llm_utils import (
+    parse_json_response,
+    generate_cache_key,
+    generate_paper_cache_key,
+    format_paper_metadata,
+    AsyncLRUCache,
+    sanitize_arxiv_id,
+)
+
 # Groq client (primary LLM provider)
 from .groq_client import GroqClient, create_groq_client, groq_client
 
@@ -29,6 +39,13 @@ except ImportError:
     openrouter_client = None
 
 __all__ = [
+    # Shared utilities
+    'parse_json_response',
+    'generate_cache_key',
+    'generate_paper_cache_key',
+    'format_paper_metadata',
+    'AsyncLRUCache',
+    'sanitize_arxiv_id',
     # Groq
     'GroqClient',
     'create_groq_client', 

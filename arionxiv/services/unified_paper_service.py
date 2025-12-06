@@ -24,9 +24,19 @@ from ..arxiv_operations.client import arxiv_client
 from ..arxiv_operations.fetcher import arxiv_fetcher
 
 try:
-    from cli.ui.theme_system import create_themed_console, style_text, get_theme_colors
+    from ..cli.ui.theme_system import create_themed_console, style_text, get_theme_colors
 except ImportError:
-    from cli.ui.theme import create_themed_console, style_text, get_theme_colors
+    try:
+        from ..cli.ui.theme import create_themed_console, style_text, get_theme_colors
+    except ImportError:
+        # Fallback for when running without CLI context (e.g., server mode)
+        def create_themed_console():
+            from rich.console import Console
+            return Console()
+        def style_text(text, style=None):
+            return text
+        def get_theme_colors():
+            return {}
 
 logger = logging.getLogger(__name__)
 

@@ -178,7 +178,8 @@ try:
     PROMPT_SERVICE_AVAILABLE = True
 except ImportError:
     PROMPT_SERVICE_AVAILABLE = False
-    logger.warning("UnifiedPromptService not available - using fallback prompts")
+    # Debug level - this is expected during module initialization
+    logger.debug("UnifiedPromptService not available - using fallback prompts")
 
 def format_prompt(prompt_name: str, **kwargs) -> str:
     """

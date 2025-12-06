@@ -25,6 +25,12 @@ from .api_config import (
     show_api_status,
 )
 
+from .api_client import (
+    ArionXivAPIClient,
+    APIClientError,
+    api_client,
+)
+
 __all__ = [
     'slam_content',
     'slam_columns',
@@ -42,4 +48,7 @@ __all__ = [
     'api_config_manager',
     'run_first_time_api_setup',
     'show_api_status',
+    'ArionXivAPIClient',
+    'APIClientError',
+    'api_client',
 ]

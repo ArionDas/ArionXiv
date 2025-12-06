@@ -2,14 +2,9 @@ import requests
 import aiohttp
 import asyncio
 import os
-import sys
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir)
 
 from ..services.unified_pdf_service import pdf_processor
 
