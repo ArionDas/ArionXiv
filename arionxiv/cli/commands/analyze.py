@@ -27,11 +27,10 @@ from ...arxiv_operations.fetcher import arxiv_fetcher
 from ...arxiv_operations.utils import ArxivUtils
 from ...services.unified_pdf_service import pdf_processor
 from ...services.unified_analysis_service import unified_analysis_service
-from ...services.unified_database_service import unified_database_service
-from ..utils.db_config_manager import db_config_manager as config_manager
+from ..utils.api_client import api_client, APIClientError
 from ..ui.theme import create_themed_console, print_header, style_text, print_success, print_error, print_warning, get_theme_colors
 from ..utils.command_suggestions import show_command_suggestions
-from ..utils.animations import *
+from ..utils.animations import left_to_right_reveal
 
 console = create_themed_console()
 logger = logging.getLogger(__name__)
@@ -110,11 +109,6 @@ async def _analyze_paper(query: str, analysis_type: str, save_results: bool, use
     # Get theme colors for consistent styling
     from ..ui.theme import get_theme_colors
     colors = get_theme_colors()
-    
-    # Ensure database connection is established before any DB operations
-    if unified_database_service.db is None:
-        logger.debug("Connecting to database")
-        await unified_database_service.connect_mongodb()
     
     # Determine if query is an arXiv ID or search term
     import re
@@ -209,22 +203,6 @@ async def _analyze_paper(query: str, analysis_type: str, save_results: bool, use
                 text_file = Path(pdf_path).with_suffix('.txt')
                 with open(text_file, 'w', encoding='utf-8') as f:
                     f.write(paper_text)
-            
-            # Save paper to database (like chat flow does) - do this in both cases
-            paper_to_save = {
-                'arxiv_id': clean_paper_id,
-                'title': paper_metadata.get('title', ''),
-                'authors': paper_metadata.get('authors', []),
-                'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
-                'categories': paper_metadata.get('categories', []),
-                'published': paper_metadata.get('published', ''),
-                'updated': paper_metadata.get('updated', ''),
-                'pdf_url': f"https://arxiv.org/pdf/{clean_paper_id}.pdf",
-                'pdf_path': str(pdf_path) if pdf_path else '',
-                'text_path': str(text_file) if text_file else '',
-                'full_text': paper_text,
-            }
-            await unified_database_service.save_paper(paper_to_save)
             
             progress.update(content_task, description="Content prepared")
             progress.remove_task(content_task)
@@ -507,67 +485,63 @@ def _display_analysis_results(metadata: dict, analysis_result: dict, analysis_ty
 
 
 async def _offer_save_paper_to_library(console: Console, colors: dict, paper_metadata: dict):
-    """Offer to save paper to user's library after analysis (same flow as chat)"""
+    """Offer to save paper to user's library after analysis via API"""
     from rich.prompt import Prompt
+    from ...services.unified_user_service import unified_user_service
     
-    # Ensure database connection is established
-    if unified_database_service.db is None:
-        await unified_database_service.connect_mongodb()
-    
-    # Get current user
-    user = config_manager.get_current_user()
-    if not user:
-        return
-    
-    user_name = user.get("user_name", "")
-    if not user_name:
+    # Check auth
+    if not unified_user_service.is_authenticated() and not api_client.is_authenticated():
         return
     
     arxiv_id = paper_metadata.get('arxiv_id', '')
-    title = paper_metadata.get('title', 'Unknown')
-    
     if not arxiv_id:
         return
     
-    # Check if already saved
-    user_papers = await unified_database_service.get_user_papers(user_name)
-    already_saved = any(p.get('arxiv_id') == arxiv_id for p in user_papers)
-    
-    if already_saved:
-        left_to_right_reveal(console, "\nThis paper is already in your library.", style=f"bold {colors['primary']}", duration=1.0)
-        return
-    
-    # Check max papers limit
-    if len(user_papers) >= MAX_USER_PAPERS:
-        left_to_right_reveal(console, f"\nYou have reached the maximum of {MAX_USER_PAPERS} saved papers.", style=f"bold {colors['warning']}", duration=1.0)
-        left_to_right_reveal(console, "Use 'arionxiv settings' to manage your saved papers.", style=f"bold {colors['primary']}", duration=1.0)
-        return
-    
-    # Ask user if they want to save
-    save_choice = Prompt.ask(
-        f"\n[bold {colors['primary']}]Save this paper to your library for quick access? (y/n)[/bold {colors['primary']}]",
-        choices=["y", "n"],
-        default="y"
-    )
-    
-    if save_choice == "y":
-        # Show progress indicator while saving (handles potential rate limits gracefully)
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-            transient=True
-        ) as progress:
-            progress.add_task(f"[{colors['primary']}]Saving paper to library...[/{colors['primary']}]", total=None)
-            # Paper is already saved to papers collection during analysis phase
-            # Just add to user's library
-            success = await unified_database_service.add_user_paper(user_name, arxiv_id, category="analysis")
+    try:
+        # Check if already in library
+        library_result = await api_client.get_library(limit=100)
+        if library_result.get("success"):
+            papers = library_result.get("papers", [])
+            if any(p.get('arxiv_id') == arxiv_id for p in papers):
+                left_to_right_reveal(console, "\nThis paper is already in your library.", 
+                                   style=f"bold {colors['primary']}", duration=1.0)
+                return
+            
+            if len(papers) >= MAX_USER_PAPERS:
+                left_to_right_reveal(console, f"\nYou have reached the maximum of {MAX_USER_PAPERS} saved papers.", 
+                                   style=f"bold {colors['warning']}", duration=1.0)
+                left_to_right_reveal(console, "Use 'arionxiv settings' to manage your saved papers.", 
+                                   style=f"bold {colors['primary']}", duration=1.0)
+                return
         
-        if success:
-            left_to_right_reveal(console, "Paper saved to your library!", style=f"bold {colors['primary']}", duration=1.0)
-        else:
-            # Show a friendlier error message
-            left_to_right_reveal(console, "Could not save paper at this time. Please try again later.", style=f"bold {colors['warning']}", duration=1.0)
+        # Ask user if they want to save
+        save_choice = Prompt.ask(
+            f"\n[bold {colors['primary']}]Save this paper to your library for quick access? (y/n)[/bold {colors['primary']}]",
+            choices=["y", "n"],
+            default="y"
+        )
+        
+        if save_choice == "y":
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True
+            ) as progress:
+                progress.add_task(f"[{colors['primary']}]Saving paper to library...[/{colors['primary']}]", total=None)
+                result = await api_client.add_to_library(arxiv_id=arxiv_id)
+            
+            if result.get("success"):
+                left_to_right_reveal(console, "Paper saved to your library!", 
+                                   style=f"bold {colors['primary']}", duration=1.0)
+            else:
+                left_to_right_reveal(console, "Could not save paper at this time.", 
+                                   style=f"bold {colors['warning']}", duration=1.0)
+                
+    except APIClientError as e:
+        logger.debug(f"API error saving paper: {e.message}")
+    except Exception as e:
+        logger.debug(f"Error saving paper: {e}")
 
 
 def _save_analysis_results(paper_id: str, analysis_result: dict, analysis_type: str):
