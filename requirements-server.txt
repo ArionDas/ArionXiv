@@ -1,0 +1,47 @@
+# ArionXiv Server Requirements - Lightweight (No ML deps)
+# For Railway/Render deployment
+
+# Database and Storage
+pymongo==4.15.0
+motor==3.7.1
+
+# Web Framework and API
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+pydantic-settings==2.1.0
+
+# Authentication and Security
+PyJWT==2.10.1
+bcrypt==4.3.0
+
+# HTTP Requests and Configuration
+requests==2.32.5
+aiohttp==3.12.15
+python-dotenv==1.0.0
+httpx==0.28.1
+nest_asyncio==1.5.6
+
+# Multipart Form Data
+python-multipart==0.0.20
+
+# PDF Processing (Core only - no OCR)
+PyPDF2==3.0.1
+pdfplumber==0.10.0
+
+# LLM Integration (API-based, no local models)
+groq==0.31.1
+google-generativeai==0.8.5
+
+# Data Processing
+typing-extensions==4.15.0
+numpy==1.26.4
+
+# Logging
+structlog==23.2.0
+
+# Scheduling
+APScheduler==3.10.4
+
+# ArXiv API
+arxiv==2.2.0

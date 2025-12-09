@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacks]
+pkgs = ["python311"]
+
+[deploy]
+startCommand = "pip install -r requirements-server.txt && uvicorn arionxiv.server:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
