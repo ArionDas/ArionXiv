@@ -835,7 +835,8 @@ def papers_config():
                                 if result.get("success"):
                                     deleted_count += 1
                             except APIClientError:
-                                pass
+                                logger.error(f"Failed to remove paper from library: {e}", exc_info=True)
+                                console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}")
                     
                     print_success(console, f"Deleted {deleted_count} paper(s) from your library.")
                 else:

@@ -94,7 +94,8 @@ async def _get_user_papers_from_api() -> List[Dict]:
         if result.get("success"):
             return result.get("papers", [])
     except APIClientError:
-        pass
+        logger.error(f"Failed to fetch user papers from API: {e}", exc_info=True)
+        console.print(f"[bold {colors['error']}]Failed to fetch user papers from API.[/bold {colors['error']}")
     return []
 
 
@@ -105,7 +106,8 @@ async def _get_chat_sessions_from_api() -> List[Dict]:
         if result.get("success"):
             return result.get("sessions", [])
     except APIClientError:
-        pass
+        logger.error(f"Failed to fetch chat sessions from API: {e}", exc_info=True)
+        console.print(f"[bold {colors['error']}]Failed to fetch chat sessions from API.[/bold {colors['error']}")
     return []
 
 
@@ -564,7 +566,8 @@ async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str
                     if result.get("success"):
                         deleted_count += 1
                 except APIClientError:
-                    pass
+                    logger.error(f"Failed to remove paper from library: {e}", exc_info=True)
+                    console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}]")
         
         console.print(f"\n[bold {colors['primary']}]Deleted {deleted_count} paper(s) from your library.[/bold {colors['primary']}]")
         
