@@ -11,9 +11,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Default API URL - can be overridden by environment variable
-# Update this after deploying to Render
-DEFAULT_API_URL = "https://arionxiv-api.onrender.com"
+# Default API URL - the hosted ArionXiv backend
+DEFAULT_API_URL = "https://arionxiv.onrender.com"
 
 
 class APIClientError(Exception):

@@ -34,10 +34,9 @@ class UnifiedDatabaseService:
     3. All CRUD operations for papers, users, sessions, and analysis
     """
     
-    # Default production MongoDB URI for the ArionXiv hosted service
-    # This allows the PyPI package to work out-of-the-box without user configuration
-    # Environment variables can override this for development/testing
-    DEFAULT_MONGODB_URI = "mongodb+srv://ariondasad:Und3O0QEypfYqawd@arionxiv.cycfdc0.mongodb.net/?retryWrites=true&w=majority"
+    # MongoDB URI must be provided via environment variable
+    # Set MONGODB_URI in .env file or as environment variable
+    DEFAULT_MONGODB_URI = None
     
     def __init__(self):
         # Async database clients
@@ -54,13 +53,13 @@ class UnifiedDatabaseService:
         logger.info("UnifiedDatabaseService initialized")
     
     @property
-    def db_url(self) -> str:
-        """Get MongoDB URL - uses environment variable if set, otherwise uses default production URI."""
+    def db_url(self) -> Optional[str]:
+        """Get MongoDB URL - uses environment variable if set, otherwise returns None."""
         if self._db_url is None:
             # Check environment variables first (for development/testing override)
             self._db_url = os.getenv('MONGODB_URI') or os.getenv('MONGODB_URL')
-            # Fall back to default production URI
-            if not self._db_url:
+            # Fall back to default production URI if available
+            if not self._db_url and self.DEFAULT_MONGODB_URI:
                 self._db_url = self.DEFAULT_MONGODB_URI
         return self._db_url
     
@@ -74,6 +73,12 @@ class UnifiedDatabaseService:
         """
 
         try:
+            # Check if MongoDB URI is configured
+            if not self.db_url:
+                logger.error("MongoDB connection string not found. Set MONGODB_URI environment variable.")
+                logger.info("To configure: set MONGODB_URI=mongodb+srv://... in your environment or .env file")
+                raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
+            
             logger.info("Attempting to connect to MongoDB Atlas...")
             
             # Import config service for connection parameters

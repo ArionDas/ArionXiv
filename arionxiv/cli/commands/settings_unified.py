@@ -34,7 +34,7 @@ except ImportError:
     
 from ...services.unified_user_service import unified_user_service
 from ...services.unified_config_service import unified_config_service
-from ...services.unified_database_service import unified_database_service
+from ..utils.api_client import api_client, APIClientError
 
 # Try to import schedule_user_daily_dose, fallback if not available
 try:
@@ -117,7 +117,6 @@ def show_settings(detailed: bool):
     
     async def _show():
         await _ensure_authenticated()
-        await unified_database_service.connect()
         print_header(console, "ArionXiv Settings Overview")
         
         # Load current configuration
@@ -398,9 +397,8 @@ def daily_config(enable: Optional[bool], time_str: Optional[str], papers: Option
     
     async def _daily():
         await _ensure_authenticated()
-        await unified_database_service.connect()
         
-        # Import daily dose service
+        # Import daily dose service - uses API for remote settings
         from ...services.unified_daily_dose_service import unified_daily_dose_service
         
         print_header(console, "Daily Dose Configuration")
@@ -753,22 +751,26 @@ def papers_config():
     
     async def _papers():
         await _ensure_authenticated()
-        await unified_database_service.connect()
         print_header(console, "Saved Papers Management")
         
-        user = unified_user_service.get_current_user()
-        user_name = user.get('user_name', 'default')
+        colors = get_theme_colors()
         
-        # Get user's saved papers
-        user_papers = await unified_database_service.get_user_papers(user_name)
+        # Get user's saved papers from API
+        try:
+            result = await api_client.get_library(limit=100)
+            if not result.get("success"):
+                print_error(console, "Failed to fetch library")
+                return
+            user_papers = result.get("papers", [])
+        except APIClientError as e:
+            print_error(console, f"API Error: {e.message}")
+            return
         
         if not user_papers:
             print_warning(console, "No saved papers in your library.")
             console.print(f"\n{style_text('Use arionxiv chat to chat with papers and save them.', 'primary')}")
             show_command_suggestions(console, context='settings')
             return
-        
-        colors = get_theme_colors()
         
         console.print(f"\n[bold {colors['primary']}]Your saved papers ({len(user_papers)}/10):[/bold {colors['primary']}]\n")
         
@@ -828,9 +830,12 @@ def papers_config():
                         paper = user_papers[idx]
                         arxiv_id = paper.get("arxiv_id")
                         if arxiv_id:
-                            success = await unified_database_service.remove_user_paper(user_name, arxiv_id)
-                            if success:
-                                deleted_count += 1
+                            try:
+                                result = await api_client.remove_from_library(arxiv_id)
+                                if result.get("success"):
+                                    deleted_count += 1
+                            except APIClientError:
+                                pass
                     
                     print_success(console, f"Deleted {deleted_count} paper(s) from your library.")
                 else:

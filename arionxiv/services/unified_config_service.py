@@ -22,11 +22,10 @@ class UnifiedConfigService:
     """
     
     def __init__(self, debug_mode: bool = False, quiet: bool = False):
-        # Default production MongoDB URI for the ArionXiv hosted service
-        DEFAULT_MONGODB_URI = "mongodb+srv://ariondasad:Und3O0QEypfYqawd@arionxiv.cycfdc0.mongodb.net/?retryWrites=true&w=majority"
-        
-        # Configuration constants - Load from environment first, fallback to defaults
-        self.MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL") or DEFAULT_MONGODB_URI
+        # Configuration constants - MongoDB URI must be set via environment variable
+        self.MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL")
+        if not self.MONGODB_URI:
+            logging.getLogger(__name__).warning("MONGODB_URI not set - database features will be unavailable")
         self.DATABASE_NAME = os.getenv("DATABASE_NAME", "arionxiv")
         
         # MongoDB Connection Settings

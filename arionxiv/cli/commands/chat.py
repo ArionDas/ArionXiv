@@ -1,16 +1,11 @@
 """
 Enhanced Chat Interface for ArionXiv
-Chat with research papers using RAG
+Chat with research papers using RAG - Uses hosted API for user data
 """
 
-import sys
 import asyncio
 import logging
-from pathlib import Path
 from typing import Optional, Dict, Any, List
-
-backend_path = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(backend_path))
 
 import click
 from rich.console import Console
@@ -19,20 +14,18 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from ...services.unified_paper_service import unified_paper_service
-from ...services.unified_analysis_service import rag_chat_system
+from ..utils.api_client import api_client, APIClientError
 from ...services.unified_user_service import unified_user_service
-from ...services.unified_database_service import unified_database_service
+from ...services.unified_analysis_service import rag_chat_system
 from ...arxiv_operations.client import arxiv_client
 from ...arxiv_operations.fetcher import arxiv_fetcher
 from ...arxiv_operations.searcher import arxiv_searcher
 from ...arxiv_operations.utils import ArxivUtils
 from ..ui.theme import create_themed_console, style_text, get_theme_colors, create_themed_table
-from ..utils.animations import *
+from ..utils.animations import left_to_right_reveal, row_by_row_table_reveal
 from ..utils.command_suggestions import show_command_suggestions
 
 logger = logging.getLogger(__name__)
-
 MAX_USER_PAPERS = 10
 
 
@@ -48,8 +41,6 @@ async def run_chat_command(paper_id: Optional[str] = None):
     console = create_themed_console()
     colors = get_theme_colors()
     
-    await unified_database_service.connect()
-    
     console.print(Panel(
         f"[bold {colors['primary']}]ArionXiv Chat System[/bold {colors['primary']}]\n"
         f"[bold {colors['primary']}]Intelligent chat with your research papers[/bold {colors['primary']}]",
@@ -58,13 +49,16 @@ async def run_chat_command(paper_id: Optional[str] = None):
     ))
     
     try:
-        user_data = unified_user_service.get_current_user()
-        if not user_data:
-            left_to_right_reveal(console, "No user logged in. Please login first with: arionxiv login", style=f"bold {colors['warning']}", duration=1.0)
+        # Check authentication
+        if not unified_user_service.is_authenticated() and not api_client.is_authenticated():
+            left_to_right_reveal(console, "No user logged in. Please login first with: arionxiv login", 
+                               style=f"bold {colors['warning']}", duration=1.0)
             return
         
-        user_name = user_data.get('user_name', 'default')
-        left_to_right_reveal(console, f"\nLogged in as: {user_name}\n", style=f"bold {colors['primary']}", duration=1.0)
+        user_data = unified_user_service.get_current_user()
+        user_name = user_data.get('user_name', 'User') if user_data else 'User'
+        left_to_right_reveal(console, f"\nLogged in as: {user_name}\n", 
+                           style=f"bold {colors['primary']}", duration=1.0)
         
         selected_paper = None
         
@@ -74,12 +68,10 @@ async def run_chat_command(paper_id: Optional[str] = None):
             selected_paper = await _show_chat_menu(console, colors, user_name)
         
         if not selected_paper:
-            # User chose to exit - show command suggestions
             show_command_suggestions(console, context='chat')
             return
         
         if selected_paper == "SESSION_COMPLETED":
-            # Session was continued and completed, suggestions already shown
             return
         
         await _start_chat_with_paper(console, colors, user_name, selected_paper)
@@ -95,60 +87,88 @@ async def run_chat_command(paper_id: Optional[str] = None):
         logger.error(f"Chat command error: {str(e)}", exc_info=True)
 
 
+async def _get_user_papers_from_api() -> List[Dict]:
+    """Get user's saved papers from API"""
+    try:
+        result = await api_client.get_library(limit=MAX_USER_PAPERS)
+        if result.get("success"):
+            return result.get("papers", [])
+    except APIClientError:
+        pass
+    return []
+
+
+async def _get_chat_sessions_from_api() -> List[Dict]:
+    """Get active chat sessions from API"""
+    try:
+        result = await api_client.get_chat_sessions(active_only=True)
+        if result.get("success"):
+            return result.get("sessions", [])
+    except APIClientError:
+        pass
+    return []
+
+
 async def _show_chat_menu(console: Console, colors: Dict, user_name: str) -> Optional[Dict[str, Any]]:
     """Show main chat menu with options"""
     
-    while True:  # Loop to allow going back
-        user_papers = await unified_database_service.get_user_papers(user_name)
-        active_sessions = await unified_database_service.get_active_chat_sessions(user_name)
+    while True:
+        user_papers = await _get_user_papers_from_api()
+        active_sessions = await _get_chat_sessions_from_api()
         
-        left_to_right_reveal(console, "What would you like to do?", style=f"bold {colors['primary']}", duration=1.0)
+        left_to_right_reveal(console, "What would you like to do?", style=f"bold {colors['primary']}", duration=0.5)
         console.print()
-        left_to_right_reveal(console, "1. Search for a new paper", style=f"bold {colors['primary']}", duration=1.0)
+        left_to_right_reveal(console, "1. Search for a new paper", style=f"bold {colors['primary']}", duration=0.5)
         
         if user_papers:
-            left_to_right_reveal(console, f"2. Chat with saved papers ({len(user_papers)} saved)", style=f"bold {colors['primary']}", duration=1.0)
+            left_to_right_reveal(console, f"2. Chat with saved papers ({len(user_papers)} saved)", 
+                               style=f"bold {colors['primary']}", duration=0.5)
         else:
-            left_to_right_reveal(console, "2. Chat with saved papers (none saved)", style=f"bold {colors['primary']}", duration=1.0)
+            left_to_right_reveal(console, "2. Chat with saved papers (none saved)", 
+                               style=f"bold {colors['primary']}", duration=0.5)
         
         if active_sessions:
-            left_to_right_reveal(console, f"3. Continue a previous chat ({len(active_sessions)} active)", style=f"bold {colors['primary']}", duration=1.0)
+            left_to_right_reveal(console, f"3. Continue a previous chat ({len(active_sessions)} active)", 
+                               style=f"bold {colors['primary']}", duration=0.5)
         else:
-            left_to_right_reveal(console, "3. Continue a previous chat (no active sessions)", style=f"bold {colors['primary']}", duration=1.0)
+            left_to_right_reveal(console, "3. Continue a previous chat (no active sessions)", 
+                               style=f"bold {colors['primary']}", duration=0.5)
         
-        left_to_right_reveal(console, "0. Exit", style=f"bold {colors['primary']}", duration=1.0)
+        left_to_right_reveal(console, "0. Exit", style=f"bold {colors['primary']}", duration=0.5)
         
-        choice = Prompt.ask(f"\n[bold {colors['primary']}]Select option[/bold {colors['primary']}]", choices=["0", "1", "2", "3"], default="1")
+        choice = Prompt.ask(f"\n[bold {colors['primary']}]Select option[/bold {colors['primary']}]", 
+                          choices=["0", "1", "2", "3"], default="1")
         
         if choice == "0":
             return None
         elif choice == "1":
             result = await _search_and_select_paper(console, colors)
             if result == "GO_BACK":
-                continue  # Go back to menu
+                continue
             return result
         elif choice == "2":
             if not user_papers:
-                left_to_right_reveal(console, "\nNo saved papers. Please search for a paper first.", style=f"bold {colors['warning']}", duration=1.0)
+                left_to_right_reveal(console, "\nNo saved papers. Please search for a paper first.", 
+                                   style=f"bold {colors['warning']}", duration=0.5)
                 result = await _search_and_select_paper(console, colors)
                 if result == "GO_BACK":
                     continue
                 return result
             result = await _select_from_saved_papers(console, colors, user_papers)
             if result == "GO_BACK":
-                console.print()  # Add spacing before showing menu again
-                continue  # Go back to menu
+                console.print()
+                continue
             return result
         elif choice == "3":
             if not active_sessions:
-                left_to_right_reveal(console, "\nNo active chat sessions within the last 24 hours.", style=f"bold {colors['warning']}", duration=1.0)
+                left_to_right_reveal(console, "\nNo active chat sessions within the last 24 hours.", 
+                                   style=f"bold {colors['warning']}", duration=0.5)
                 continue
             result = await _select_and_continue_session(console, colors, user_name, active_sessions)
             if result == "GO_BACK":
                 console.print()
                 continue
             if result == "SESSION_CONTINUED":
-                # Session was continued and completed, exit (suggestions already shown)
                 return "SESSION_COMPLETED"
             return result
 
@@ -158,28 +178,25 @@ async def _search_and_select_paper(console: Console, colors: Dict) -> Optional[D
     
     query = Prompt.ask(f"\n[bold {colors['primary']}]Enter search query (or 0 to go back)[/bold {colors['primary']}]")
     
-    if not query.strip():
-        left_to_right_reveal(console, "No query provided.", style=f"bold {colors['warning']}", duration=1.0)
+    if not query.strip() or query.strip() == "0":
         return "GO_BACK"
     
-    if query.strip() == "0":
-        return "GO_BACK"
-    
-    left_to_right_reveal(console, "\nSearching arXiv...", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, "\nSearching arXiv...", style=f"bold {colors['primary']}", duration=0.5)
     
     try:
         results = await arxiv_searcher.search(query=query, max_results=10)
         
         if not results.get("success") or not results.get("papers"):
-            left_to_right_reveal(console, f"No papers found for: {query}", style=f"bold {colors['warning']}", duration=1.0)
+            left_to_right_reveal(console, f"No papers found for: {query}", 
+                               style=f"bold {colors['warning']}", duration=0.5)
             return "GO_BACK"
         
         papers = results["papers"]
         
-        left_to_right_reveal(console, f"\nFound {len(papers)} papers:", style=f"bold {colors['primary']}", duration=1.0)
+        left_to_right_reveal(console, f"\nFound {len(papers)} papers:", 
+                           style=f"bold {colors['primary']}", duration=0.5)
         console.print()
         
-        # Display table row by row with animation
         await _display_papers_table_animated(console, colors, papers, "Search Results")
         
         choice = Prompt.ask(f"\n[bold {colors['primary']}]Select paper (1-{len(papers)}) or 0 to go back[/bold {colors['primary']}]")
@@ -189,16 +206,16 @@ async def _search_and_select_paper(console: Console, colors: Dict) -> Optional[D
             if idx == -1:
                 return "GO_BACK"
             if idx < 0 or idx >= len(papers):
-                left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=1.0)
+                left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=0.5)
                 return None
         except ValueError:
-            left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=1.0)
+            left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=0.5)
             return None
         
         return papers[idx]
         
     except Exception as e:
-        left_to_right_reveal(console, f"Search failed: {str(e)}", style=f"bold {colors['error']}", duration=1.0)
+        left_to_right_reveal(console, f"Search failed: {str(e)}", style=f"bold {colors['error']}", duration=0.5)
         return "GO_BACK"
 
 
@@ -228,10 +245,9 @@ async def _display_papers_table_animated(console: Console, colors: Dict, papers:
 async def _select_from_saved_papers(console: Console, colors: Dict, papers: List[Dict]) -> Optional[Dict[str, Any]]:
     """Let user select from their saved papers. Returns 'GO_BACK' to go back to menu."""
     
-    left_to_right_reveal(console, "\nYour saved papers:", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, "\nYour saved papers:", style=f"bold {colors['primary']}", duration=0.5)
     console.print()
     
-    # Display table row by row with animation
     await _display_saved_papers_animated(console, colors, papers)
     
     choice = Prompt.ask(f"\n[bold {colors['primary']}]Select paper (1-{len(papers)}) or 0 to go back[/bold {colors['primary']}]")
@@ -239,12 +255,12 @@ async def _select_from_saved_papers(console: Console, colors: Dict, papers: List
     try:
         idx = int(choice) - 1
         if idx == -1:
-            return "GO_BACK"  # Return special value to go back to menu
+            return "GO_BACK"
         if idx < 0 or idx >= len(papers):
-            left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=1.0)
+            left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=0.5)
             return None
     except ValueError:
-        left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=1.0)
+        left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=0.5)
         return None
     
     return papers[idx]
@@ -274,13 +290,13 @@ async def _display_saved_papers_animated(console: Console, colors: Dict, papers:
 
 
 async def _select_and_continue_session(console: Console, colors: Dict, user_name: str, sessions: List[Dict]) -> Optional[str]:
-    """Let user select from active chat sessions and continue. Returns 'GO_BACK', 'SESSION_CONTINUED', or None."""
+    """Let user select from active chat sessions and continue."""
     from datetime import datetime
     
-    left_to_right_reveal(console, "\nActive chat sessions (last 24 hours):", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, "\nActive chat sessions (last 24 hours):", 
+                        style=f"bold {colors['primary']}", duration=0.5)
     console.print()
     
-    # Display sessions table
     await _display_sessions_table_animated(console, colors, sessions)
     
     choice = Prompt.ask(f"\n[bold {colors['primary']}]Select session (1-{len(sessions)}) or 0 to go back[/bold {colors['primary']}]")
@@ -290,15 +306,13 @@ async def _select_and_continue_session(console: Console, colors: Dict, user_name
         if idx == -1:
             return "GO_BACK"
         if idx < 0 or idx >= len(sessions):
-            left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=1.0)
+            left_to_right_reveal(console, "Invalid selection.", style=f"bold {colors['error']}", duration=0.5)
             return None
     except ValueError:
-        left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=1.0)
+        left_to_right_reveal(console, "Invalid input.", style=f"bold {colors['error']}", duration=0.5)
         return None
     
     selected_session = sessions[idx]
-    
-    # Continue the selected session
     await _continue_chat_session(console, colors, user_name, selected_session)
     
     return "SESSION_CONTINUED"
@@ -336,7 +350,6 @@ async def _display_sessions_table_animated(console: Console, colors: Dict, sessi
                 time_str = "Unknown"
             
             msg_count = session.get("message_count", len(session.get("messages", [])))
-            # Each exchange is 2 messages (user + assistant)
             exchanges = msg_count // 2
             
             table.add_row(str(i + 1), title, time_str, str(exchanges))
@@ -351,64 +364,56 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
     paper_id = session.get('paper_id', '')
     paper_title = session.get('paper_title', 'Unknown Paper')
     
-    left_to_right_reveal(console, f"\nResuming chat with: {paper_title}", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, f"\nResuming chat with: {paper_title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    # Fetch paper data to re-index
-    existing_paper = await unified_database_service.get_paper(paper_id)
+    # Fetch paper data - try local cache first
+    paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
     
-    if not existing_paper or not existing_paper.get('full_text'):
-        # Try to fetch from ArXiv if not in DB
-        left_to_right_reveal(console, "Fetching paper content...", style=f"bold {colors['primary']}", duration=1.0)
-        paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
-        
-        if not paper_metadata:
-            left_to_right_reveal(console, f"Could not retrieve paper {paper_id}. Session may have expired.", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        # Download and extract text
-        pdf_url = paper_metadata.get('pdf_url')
-        if not pdf_url:
-            left_to_right_reveal(console, "No PDF URL available for this paper.", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=1.0)
-        pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, paper_id, pdf_url)
-        
-        if not pdf_path:
-            left_to_right_reveal(console, "Failed to download PDF.", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=1.0)
-        from ...services.unified_pdf_service import pdf_processor
-        text_content = await pdf_processor.extract_text(pdf_path)
-        
-        if not text_content:
-            left_to_right_reveal(console, "Failed to extract text from PDF.", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        paper_info = {
-            'arxiv_id': paper_id,
-            'title': paper_metadata.get('title', paper_title),
-            'authors': paper_metadata.get('authors', []),
-            'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
-            'full_text': text_content
-        }
-    else:
-        paper_info = existing_paper
+    if not paper_metadata:
+        left_to_right_reveal(console, f"Could not retrieve paper {paper_id}.", style=f"bold {colors['error']}", duration=0.5)
+        return
     
-    # Continue the chat session
+    # Download and extract text
+    pdf_url = paper_metadata.get('pdf_url')
+    if not pdf_url:
+        left_to_right_reveal(console, "No PDF URL available for this paper.", style=f"bold {colors['error']}", duration=0.5)
+        return
+    
+    left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
+    pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, paper_id, pdf_url)
+    
+    if not pdf_path:
+        left_to_right_reveal(console, "Failed to download PDF.", style=f"bold {colors['error']}", duration=0.5)
+        return
+    
+    left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
+    from ...services.unified_pdf_service import pdf_processor
+    text_content = await pdf_processor.extract_text(pdf_path)
+    
+    if not text_content:
+        left_to_right_reveal(console, "Failed to extract text from PDF.", style=f"bold {colors['error']}", duration=0.5)
+        return
+    
+    paper_info = {
+        'arxiv_id': paper_id,
+        'title': paper_metadata.get('title', paper_title),
+        'authors': paper_metadata.get('authors', []),
+        'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
+        'full_text': text_content
+    }
+    
     await rag_chat_system.continue_chat_session(session, paper_info)
 
 
 async def _fetch_paper_by_id(console: Console, colors: Dict, arxiv_id: str) -> Optional[Dict[str, Any]]:
     """Fetch paper metadata by arXiv ID"""
     
-    left_to_right_reveal(console, f"\nFetching paper {arxiv_id}...", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, f"\nFetching paper {arxiv_id}...", style=f"bold {colors['primary']}", duration=0.5)
     
     paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, arxiv_id)
     
     if not paper_metadata:
-        left_to_right_reveal(console, f"Failed to fetch paper {arxiv_id} from ArXiv", style=f"bold {colors['error']}", duration=1.0)
+        left_to_right_reveal(console, f"Failed to fetch paper {arxiv_id} from ArXiv", style=f"bold {colors['error']}", duration=0.5)
         return None
     
     return paper_metadata
@@ -417,92 +422,31 @@ async def _fetch_paper_by_id(console: Console, colors: Dict, arxiv_id: str) -> O
 async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str, paper: Dict[str, Any]):
     """Start chat session with selected paper"""
     
-    # Normalize arxiv_id to ensure consistent lookup (strip version numbers)
     raw_arxiv_id = paper.get('arxiv_id') or paper.get('id', '')
     arxiv_id = ArxivUtils.normalize_arxiv_id(raw_arxiv_id)
     title = paper.get('title', arxiv_id)
     
-    left_to_right_reveal(console, f"\nSelected: {title}", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, f"\nSelected: {title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    existing_paper = await unified_database_service.get_paper(arxiv_id)
-    text_content = None
-    pdf_path = None
-    text_path = None
+    pdf_url = paper.get('pdf_url')
+    if not pdf_url:
+        left_to_right_reveal(console, "No PDF URL found for paper", style=f"bold {colors['error']}", duration=0.5)
+        return
     
-    # Verify the cached paper matches what we expect
-    # Check BOTH the title metadata AND that the full_text actually contains the title
-    # This prevents using wrong cached text if there was data corruption
-    cached_text_valid = False
-    if existing_paper and existing_paper.get('full_text'):
-        cached_title = existing_paper.get('title', '').lower().strip()
-        expected_title = title.lower().strip()
-        full_text_lower = existing_paper['full_text'].lower()
-        
-        # Normalize titles for comparison (remove newlines, extra spaces)
-        import re
-        cached_title_normalized = re.sub(r'\s+', ' ', cached_title)
-        expected_title_normalized = re.sub(r'\s+', ' ', expected_title)
-        
-        # Check 1: Title metadata matches (first 40 chars to handle minor differences)
-        title_metadata_match = cached_title_normalized[:40] == expected_title_normalized[:40]
-        
-        # Check 2: The full_text actually contains a significant portion of the title
-        # This catches cases where metadata is correct but text content is from wrong paper
-        title_words = expected_title_normalized.split()[:5]  # First 5 words of title
-        title_phrase = ' '.join(title_words)
-        text_contains_title = title_phrase in full_text_lower
-        
-        if title_metadata_match and text_contains_title:
-            cached_text_valid = True
-        else:
-            logger.warning(f"Cached paper validation failed for {arxiv_id}: "
-                          f"metadata_match={title_metadata_match}, text_contains_title={text_contains_title}. "
-                          f"Expected title: '{expected_title[:50]}', cached: '{cached_title[:50]}'. Re-downloading.")
+    left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
+    pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, arxiv_id, pdf_url)
     
-    if cached_text_valid:
-        left_to_right_reveal(console, "Using cached paper text", style=f"bold {colors['primary']}", duration=1.0)
-        text_content = existing_paper['full_text']
-        pdf_path = existing_paper.get('pdf_path', '')
-        text_path = existing_paper.get('text_path', '')
-    else:
-        pdf_url = paper.get('pdf_url')
-        if not pdf_url:
-            left_to_right_reveal(console, "No PDF URL found for paper", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=1.0)
-        pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, arxiv_id, pdf_url)
-        
-        if not pdf_path:
-            left_to_right_reveal(console, "Failed to download PDF", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=1.0)
-        from ...services.unified_pdf_service import pdf_processor
-        text_content = await pdf_processor.extract_text(pdf_path)
-        
-        if not text_content:
-            left_to_right_reveal(console, "Failed to extract text from PDF", style=f"bold {colors['error']}", duration=1.0)
-            return
-        
-        text_path = pdf_path.replace('.pdf', '.txt')
-        with open(text_path, 'w', encoding='utf-8') as f:
-            f.write(text_content)
-        
-        paper_to_save = {
-            'arxiv_id': arxiv_id,
-            'title': paper.get('title', ''),
-            'authors': paper.get('authors', []),
-            'abstract': paper.get('summary', paper.get('abstract', '')),
-            'categories': paper.get('categories', []),
-            'published': paper.get('published', ''),
-            'updated': paper.get('updated', ''),
-            'pdf_url': paper.get('pdf_url', ''),
-            'pdf_path': pdf_path,
-            'text_path': text_path,
-            'full_text': text_content,
-        }
-        await unified_database_service.save_paper(paper_to_save)
+    if not pdf_path:
+        left_to_right_reveal(console, "Failed to download PDF", style=f"bold {colors['error']}", duration=0.5)
+        return
+    
+    left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
+    from ...services.unified_pdf_service import pdf_processor
+    text_content = await pdf_processor.extract_text(pdf_path)
+    
+    if not text_content:
+        left_to_right_reveal(console, "Failed to extract text from PDF", style=f"bold {colors['error']}", duration=0.5)
+        return
     
     paper_info = {
         'arxiv_id': arxiv_id,
@@ -510,62 +454,71 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
         'authors': paper.get('authors', []),
         'abstract': paper.get('summary', paper.get('abstract', '')),
         'published': paper.get('published', ''),
-        'pdf_path': pdf_path or '',
-        'text_path': text_path or '',
+        'pdf_path': pdf_path,
         'full_text': text_content
     }
     
-    left_to_right_reveal(console, "\nStarting chat session...\n", style=f"bold {colors['primary']}", duration=1.0)
+    left_to_right_reveal(console, "\nStarting chat session...\n", style=f"bold {colors['primary']}", duration=0.5)
     await rag_chat_system.start_chat_session([paper_info], user_id=user_name)
     
-    await _offer_save_paper(console, colors, user_name, arxiv_id, title)
-    
-    # Show "What's Next?" after the chat and save prompt
+    await _offer_save_paper(console, colors, arxiv_id, title)
     show_command_suggestions(console, context='chat')
 
 
-async def _offer_save_paper(console: Console, colors: Dict, user_name: str, arxiv_id: str, title: str):
+async def _offer_save_paper(console: Console, colors: Dict, arxiv_id: str, title: str):
     """Offer to save paper to user's library after chat"""
     
-    user_papers = await unified_database_service.get_user_papers(user_name)
-    
-    already_saved = any(p.get('arxiv_id') == arxiv_id for p in user_papers)
-    if already_saved:
-        return
-    
-    if len(user_papers) >= MAX_USER_PAPERS:
-        left_to_right_reveal(console, f"\nYou have reached the maximum of {MAX_USER_PAPERS} saved papers.", style=f"bold {colors['warning']}", duration=1.0)
-        left_to_right_reveal(console, "Use 'arionxiv settings' to manage your saved papers.", style=f"bold {colors['primary']}", duration=1.0)
-        return
-    
-    save_choice = Prompt.ask(
-        f"\n[bold {colors['primary']}]Save this paper to your library for quick access? (y/n)[/bold {colors['primary']}]",
-        choices=["y", "n"],
-        default="y"
-    )
-    
-    if save_choice == "y":
-        # Show progress indicator while saving (handles potential rate limits gracefully)
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-            transient=True
-        ) as progress:
-            progress.add_task(f"[{colors['primary']}]Saving paper to library...[/{colors['primary']}]", total=None)
-            success = await unified_database_service.add_user_paper(user_name, arxiv_id, category="chat")
+    try:
+        # Check if already in library
+        library_result = await api_client.get_library(limit=100)
+        if library_result.get("success"):
+            papers = library_result.get("papers", [])
+            if any(p.get('arxiv_id') == arxiv_id for p in papers):
+                return  # Already saved
+            
+            if len(papers) >= MAX_USER_PAPERS:
+                left_to_right_reveal(console, f"\nYou have reached the maximum of {MAX_USER_PAPERS} saved papers.", style=f"bold {colors['warning']}", duration=0.5)
+                left_to_right_reveal(console, "Use 'arionxiv settings' to manage your saved papers.", style=f"bold {colors['primary']}", duration=0.5)
+                return
         
-        if success:
-            left_to_right_reveal(console, "Paper saved to your library!", style=f"bold {colors['primary']}", duration=1.0)
-        else:
-            # Show a friendlier error message
-            left_to_right_reveal(console, "Could not save paper at this time. Please try again later.", style=f"bold {colors['warning']}", duration=1.0)
+        save_choice = Prompt.ask(
+            f"\n[bold {colors['primary']}]Save this paper to your library for quick access? (y/n)[/bold {colors['primary']}]",
+            choices=["y", "n"],
+            default="y"
+        )
+        
+        if save_choice == "y":
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True
+            ) as progress:
+                progress.add_task(f"[{colors['primary']}]Saving paper to library...[/{colors['primary']}]", total=None)
+                result = await api_client.add_to_library(arxiv_id=arxiv_id)
+            
+            if result.get("success"):
+                left_to_right_reveal(console, "Paper saved to your library!", style=f"bold {colors['primary']}", duration=0.5)
+            else:
+                left_to_right_reveal(console, "Could not save paper at this time.", style=f"bold {colors['warning']}", duration=0.5)
+                
+    except APIClientError as e:
+        logger.debug(f"Error offering to save paper: {e.message}")
 
 
 async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str):
     """Show menu to delete saved papers - called from settings"""
     
-    user_papers = await unified_database_service.get_user_papers(user_name)
+    try:
+        result = await api_client.get_library(limit=100)
+        if not result.get("success"):
+            console.print(f"\n[bold {colors['error']}]Failed to fetch library.[/bold {colors['error']}]")
+            return
+        
+        user_papers = result.get("papers", [])
+    except APIClientError:
+        console.print(f"\n[bold {colors['error']}]Failed to fetch library.[/bold {colors['error']}]")
+        return
     
     if not user_papers:
         console.print(f"\n[bold {colors['warning']}]No saved papers to delete.[/bold {colors['warning']}]")
@@ -580,8 +533,6 @@ async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str
     
     for i, paper in enumerate(user_papers):
         title = paper.get("title", "Unknown")
-        if len(title) > 47:
-            title = title[:44] + "..."
         arxiv_id = paper.get("arxiv_id", "Unknown")
         table.add_row(str(i + 1), title, arxiv_id)
     
@@ -608,9 +559,12 @@ async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str
             paper = user_papers[idx]
             arxiv_id = paper.get("arxiv_id")
             if arxiv_id:
-                success = await unified_database_service.remove_user_paper(user_name, arxiv_id)
-                if success:
-                    deleted_count += 1
+                try:
+                    result = await api_client.remove_from_library(arxiv_id)
+                    if result.get("success"):
+                        deleted_count += 1
+                except APIClientError:
+                    pass
         
         console.print(f"\n[bold {colors['primary']}]Deleted {deleted_count} paper(s) from your library.[/bold {colors['primary']}]")
         
