@@ -73,5 +73,5 @@ sudo docker run -d \
     "$APP_NAME:latest"
 
 echo "=== Deployment Complete ==="
-echo "Health check: curl http://localhost:$PORT/health"
+echo "Health check: curl http://localhost:\"$PORT\"/health"
 echo "Logs: sudo docker logs -f $APP_NAME"
