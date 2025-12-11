@@ -33,7 +33,6 @@ logs
 # Platform configs (not needed in container)
 railway.toml
 render.yaml
-Procfile
 
 # Documentation
 *.md

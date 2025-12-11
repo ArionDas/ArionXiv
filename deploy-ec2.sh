@@ -21,13 +21,13 @@ if ! command -v docker &> /dev/null; then
             sudo yum install -y docker git
             sudo systemctl start docker
             sudo systemctl enable docker
-            sudo usermod -aG docker $USER
+            sudo usermod -aG docker "$USER"
         elif [ "$ID" = "ubuntu" ]; then
             sudo apt-get update
             sudo apt-get install -y docker.io git
             sudo systemctl start docker
             sudo systemctl enable docker
-            sudo usermod -aG docker $USER
+            sudo usermod -aG docker "$USER"
         fi
     fi
     echo "Docker installed. Re-login or run: newgrp docker"
@@ -36,14 +36,14 @@ fi
 # Clone or update repo
 if [ -d "$APP_NAME" ]; then
     echo "Updating repository..."
-    cd $APP_NAME
+    cd "$APP_NAME"
     git fetch origin
-    git checkout $BRANCH
-    git pull origin $BRANCH
+    git checkout "$BRANCH"
+    git pull origin "$BRANCH"
 else
     echo "Cloning repository..."
-    git clone -b $BRANCH $REPO_URL $APP_NAME
-    cd $APP_NAME
+    git clone -b "$BRANCH" "$REPO_URL" "$APP_NAME"
+    cd "$APP_NAME"
 fi
 
 # Check for .env file
@@ -58,19 +58,19 @@ fi
 
 # Build and run
 echo "Building Docker image..."
-sudo docker build -t $APP_NAME:latest .
+sudo docker build -t "$APP_NAME:latest" .
 
 echo "Stopping existing container..."
-sudo docker stop $APP_NAME 2>/dev/null || true
-sudo docker rm $APP_NAME 2>/dev/null || true
+sudo docker stop "$APP_NAME" 2>/dev/null || true
+sudo docker rm "$APP_NAME" 2>/dev/null || true
 
 echo "Starting container..."
 sudo docker run -d \
-    --name $APP_NAME \
+    --name "$APP_NAME" \
     --restart unless-stopped \
     --env-file .env \
-    -p $PORT:8000 \
-    $APP_NAME:latest
+    -p "$PORT":8000 \
+    "$APP_NAME:latest"
 
 echo "=== Deployment Complete ==="
 echo "Health check: curl http://localhost:$PORT/health"
