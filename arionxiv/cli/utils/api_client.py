@@ -11,8 +11,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Default API URL - the hosted ArionXiv backend
-DEFAULT_API_URL = "https://arionxiv.onrender.com"
+# Default API URL - the hosted ArionXiv backend on Vercel
+DEFAULT_API_URL = "https://arion-xiv.vercel.app"
 
 
 class APIClientError(Exception):
