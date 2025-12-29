@@ -35,7 +35,7 @@ class LibraryGroup(click.Group):
         error_console = Console()
         
         error_console.print()
-        error_console.print(f"[bold {colors['error']}]⚠ Invalid Library Command[/bold {colors['error']}]")
+        error_console.print(f"[bold {colors['error']}]Invalid Library Command[/bold {colors['error']}]")
         error_console.print(f"[{colors['error']}]{error}[/{colors['error']}]")
         error_console.print()
         
@@ -88,7 +88,6 @@ def add(paper_id: str, tags: str, notes: str):
         
         clean_paper_id = ArxivUtils.normalize_arxiv_id(paper_id)
         
-        # Get paper metadata from arXiv
         console.print("Fetching paper metadata...", style=colors['info'])
         paper_metadata = arxiv_client.get_paper_by_id(clean_paper_id)
         
@@ -96,15 +95,17 @@ def add(paper_id: str, tags: str, notes: str):
             console.print(f"Paper not found: {paper_id}", style=colors['error'])
             return
         
-        # Parse tags
         tag_list = [tag.strip() for tag in tags.split(',')] if tags else []
         
         try:
-            # Add via API
             result = await api_client.add_to_library(
                 arxiv_id=clean_paper_id,
+                title=paper_metadata.get('title', ''),
+                authors=paper_metadata.get('authors', []),
+                categories=paper_metadata.get('categories', []),
+                abstract=paper_metadata.get('summary', ''),
                 tags=tag_list,
-                notes=notes
+                notes=notes or ''
             )
             
             if result.get("success"):
@@ -165,7 +166,6 @@ def list(tags: str, category: str, status: str):
                 console.print("No papers match your filters.", style=colors['warning'])
                 return
             
-            # Create table
             user = unified_user_service.get_current_user()
             user_name = user.get("user_name", "User") if user else "User"
             
@@ -225,10 +225,8 @@ def stats():
                 console.print("Your library is empty.", style=colors['warning'])
                 return
             
-            # Calculate stats locally
             total = len(library)
             
-            # Category stats
             category_counts: Dict[str, int] = {}
             for paper in library:
                 for cat in paper.get("categories", []):
@@ -236,21 +234,19 @@ def stats():
             
             top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             
-            # Status stats
             status_counts: Dict[str, int] = {}
             for paper in library:
-                status = paper.get("read_status", "unread")
-                status_counts[status] = status_counts.get(status, 0) + 1
+                s = paper.get("read_status", "unread")
+                status_counts[s] = status_counts.get(s, 0) + 1
             
-            # Display
             user = unified_user_service.get_current_user()
             user_name = user.get("user_name", "User") if user else "User"
             
             stats_text = f"[bold]Total Papers:[/bold] {total}\n\n"
             stats_text += "[bold]Top Categories:[/bold]\n"
-            stats_text += "\n".join([f"  • {cat}: {count}" for cat, count in top_categories])
+            stats_text += "\n".join([f"  - {cat}: {count}" for cat, count in top_categories])
             stats_text += "\n\n[bold]Reading Status:[/bold]\n"
-            stats_text += "\n".join([f"  • {status}: {count}" for status, count in status_counts.items()])
+            stats_text += "\n".join([f"  - {s}: {count}" for s, count in status_counts.items()])
             
             console.print(Panel(
                 stats_text,

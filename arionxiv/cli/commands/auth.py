@@ -44,7 +44,6 @@ class AuthInterface:
         
         # Check if API client has a stored token
         if api_client.is_authenticated():
-            # Validate token with API and get user profile
             try:
                 profile = await api_client.get_profile()
                 if profile.get("success") and profile.get("user"):
@@ -81,8 +80,7 @@ class AuthInterface:
                 default=f"1"
             )
             
-            # Add slide effect when user makes a selection
-            left_to_right_reveal(self.console, f"Option {style_text(choice, 'primary')} selected!", duration=1.0)
+            left_to_right_reveal(self.console, f"Option {style_text(choice, 'primary')} selected!", duration=0.5)
             
             if choice == "1":
                 user = await self._login_flow()
@@ -93,7 +91,7 @@ class AuthInterface:
                 if user:
                     return user
             elif choice == "3":
-                left_to_right_reveal(self.console, f"\n{style_text('Goodbye!', 'warning')}", duration=1.0)
+                left_to_right_reveal(self.console, f"\n{style_text('Goodbye!', 'warning')}", duration=0.5)
                 return None
     
     async def _login_flow(self) -> Optional[Dict[str, Any]]:
@@ -106,7 +104,6 @@ class AuthInterface:
         
         while attempts < max_attempts:
             try:
-                # Get username/email
                 identifier = Prompt.ask(
                     f"\n[bold]{style_text('Username or Email', 'primary')}[/bold]"
                 ).strip()
@@ -115,7 +112,6 @@ class AuthInterface:
                     print_error(self.console, f"{style_text('Username/Email is required', 'error')}")
                     continue
                 
-                # Get password
                 self.console.print(f"\n[bold]{style_text('Password:', 'primary')}[/bold]")
                 password = getpass.getpass(f"> ")
                 
@@ -123,7 +119,6 @@ class AuthInterface:
                     print_error(self.console, f"{style_text('Password is required', 'error')}")
                     continue
                 
-                # Attempt login via API
                 self.console.print(f"\n[white]{style_text('Authenticating...', 'primary')}[/white]")
                 logger.info(f"Attempting login for: {identifier}")
                 
@@ -133,15 +128,11 @@ class AuthInterface:
                     user = result.get("user", {})
                     logger.info(f"Login successful for user: {user.get('user_name')}")
                     
-                    # Create local session
                     session_token = unified_user_service.create_session(user)
                     if session_token:
                         logger.debug("Session created successfully")
-                        # Slide effect for successful login!
-                        left_to_right_reveal(self.console, f"Welcome back, [bold]{style_text(user.get('user_name', 'User'), 'primary')}![/bold]", duration=1.0)
+                        left_to_right_reveal(self.console, f"Welcome back, [bold]{style_text(user.get('user_name', 'User'), 'primary')}![/bold]", duration=0.5)
                         self.console.print()
-                        
-                        # Show main menu page after successful login
                         show_logo_and_features(self.console, animate=False)
                         return user
                     else:
@@ -184,13 +175,11 @@ class AuthInterface:
         self.console.print("-" * 40)
         
         try:
-            # Get full name (optional)
             full_name = Prompt.ask(
                 f"\n[bold]{style_text('Full Name (optional)', 'primary')}[/bold]",
                 default=""
             ).strip()
             
-            # Get email
             while True:
                 email = Prompt.ask(
                     f"\n[bold]{style_text('Email Address', 'primary')}[/bold]",
@@ -202,7 +191,6 @@ class AuthInterface:
                     continue
                 break
             
-            # Get username
             while True:
                 user_name = Prompt.ask(
                     f"\n[bold]{style_text('Username', 'primary')}[/bold] (letters, numbers, underscore, hyphen only)",
@@ -213,7 +201,6 @@ class AuthInterface:
                     continue
                 break
             
-            # Get password
             while True:
                 self.console.print(f"\n[bold]{style_text('Password:', 'primary')}[/bold] (minimum 8 characters, must contain letter and number)")
                 password = getpass.getpass("> ")
@@ -222,7 +209,6 @@ class AuthInterface:
                     print_error(self.console, f"{style_text('Password is required', 'error')}")
                     continue
                 
-                # Confirm password
                 password_confirm = getpass.getpass(f"{style_text('Confirm Password:', 'primary')} ")
                 
                 if password != password_confirm:
@@ -231,7 +217,6 @@ class AuthInterface:
                 
                 break
             
-            # Show summary and confirm
             self.console.print(f"\n[bold]{style_text('Account Summary', 'primary')}[/bold]")
             self.console.print(f"Full Name: {style_text(full_name, 'primary') if full_name else style_text('Not provided', 'secondary')}")
             self.console.print(f"Email: {style_text(email, 'primary')}")
@@ -240,7 +225,6 @@ class AuthInterface:
             if not Confirm.ask(f"\n[bold]{style_text('Create account with these details?', 'primary')}[/bold]"):
                 return None
             
-            # Attempt registration via API
             self.console.print(f"\n[white]{style_text('Creating account...', 'primary')}[/white]")
             logger.info(f"Attempting registration for: {email} ({user_name})")
             
@@ -250,23 +234,18 @@ class AuthInterface:
                 user = result.get("user", {})
                 logger.info(f"Registration successful for user: {user.get('user_name')}")
                 
-                # Auto-login after registration
                 try:
                     login_result = await api_client.login(user_name, password)
                     if login_result.get("success"):
                         user = login_result.get("user", user)
                 except Exception:
-                    pass  # Continue with registration user data
+                    pass
                 
-                # Create local session
                 session_token = unified_user_service.create_session(user)
                 if session_token:
                     logger.debug("Session created for new user")
-                    # Shake effect for successful registration!
                     shake_text(self.console, f"Account created! Welcome, {user.get('user_name', 'User')}!")
                     self.console.print()
-                    
-                    # Show main menu page after successful registration
                     show_logo_and_features(self.console, animate=False)
                     return user
                 else:
@@ -319,15 +298,13 @@ class AuthInterface:
             user_name = user.get('user_name', 'User') if user else 'User'
             logger.info(f"Logging out user: {user_name}")
             
-            # Logout from API
             try:
                 await api_client.logout()
             except Exception:
-                pass  # Continue with local logout
+                pass
             
-            # Clear local session
             unified_user_service.clear_session()
-            left_to_right_reveal(self.console, f"Goodbye, [bold]{style_text(user_name, 'primary')}[/bold]!", duration=1.0)
+            left_to_right_reveal(self.console, f"Goodbye, [bold]{style_text(user_name, 'primary')}[/bold]!", duration=0.5)
         else:
             logger.debug("Logout called but no active session")
             print_warning(self.console, f"{style_text('No active session to logout', 'warning')}")
@@ -366,15 +343,12 @@ def session_command():
     auth_interface.show_session_info()
 
 
-# Keep legacy auth command for backward compatibility
 @click.command(hidden=True)
 @click.option('--login', '-l', is_flag=True, help='Force login prompt')
 @click.option('--logout', '-o', is_flag=True, help='Logout current user')
 @click.option('--info', '-i', is_flag=True, help='Show session information')
 def auth_command(login: bool, logout: bool, info: bool):
-    """
-    Manage user authentication (legacy - use login/logout/session commands instead)
-    """
+    """Manage user authentication (legacy)"""
     async def _handle_auth():
         if logout:
             await auth_interface.logout()

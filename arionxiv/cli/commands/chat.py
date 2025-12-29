@@ -93,9 +93,10 @@ async def _get_user_papers_from_api() -> List[Dict]:
         result = await api_client.get_library(limit=MAX_USER_PAPERS)
         if result.get("success"):
             return result.get("papers", [])
-    except APIClientError:
-        logger.error(f"Failed to fetch user papers from API: {e}", exc_info=True)
-        console.print(f"[bold {colors['error']}]Failed to fetch user papers from API.[/bold {colors['error']}")
+    except APIClientError as e:
+        logger.error(f"Failed to fetch user papers from API: {e.message}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Failed to fetch user papers: {e}", exc_info=True)
     return []
 
 
@@ -105,9 +106,10 @@ async def _get_chat_sessions_from_api() -> List[Dict]:
         result = await api_client.get_chat_sessions(active_only=True)
         if result.get("success"):
             return result.get("sessions", [])
-    except APIClientError:
-        logger.error(f"Failed to fetch chat sessions from API: {e}", exc_info=True)
-        console.print(f"[bold {colors['error']}]Failed to fetch chat sessions from API.[/bold {colors['error']}")
+    except APIClientError as e:
+        logger.error(f"Failed to fetch chat sessions from API: {e.message}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Failed to fetch chat sessions: {e}", exc_info=True)
     return []
 
 
@@ -490,14 +492,16 @@ async def _offer_save_paper(console: Console, colors: Dict, arxiv_id: str, title
         )
         
         if save_choice == "y":
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-                transient=True
-            ) as progress:
-                progress.add_task(f"[{colors['primary']}]Saving paper to library...[/{colors['primary']}]", total=None)
-                result = await api_client.add_to_library(arxiv_id=arxiv_id)
+            from ...arxiv_operations.client import arxiv_client as arxiv_client_local
+            paper_metadata = arxiv_client_local.get_paper_by_id(arxiv_id) or {}
+            
+            result = await api_client.add_to_library(
+                arxiv_id=arxiv_id,
+                title=title or paper_metadata.get('title', ''),
+                authors=paper_metadata.get('authors', []),
+                categories=paper_metadata.get('categories', []),
+                abstract=paper_metadata.get('summary', '')
+            )
             
             if result.get("success"):
                 left_to_right_reveal(console, "Paper saved to your library!", style=f"bold {colors['primary']}", duration=0.5)
@@ -506,6 +510,8 @@ async def _offer_save_paper(console: Console, colors: Dict, arxiv_id: str, title
                 
     except APIClientError as e:
         logger.debug(f"Error offering to save paper: {e.message}")
+    except Exception as e:
+        logger.debug(f"Error offering to save paper: {e}")
 
 
 async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str):
@@ -518,8 +524,11 @@ async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str
             return
         
         user_papers = result.get("papers", [])
-    except APIClientError:
-        console.print(f"\n[bold {colors['error']}]Failed to fetch library.[/bold {colors['error']}]")
+    except APIClientError as e:
+        console.print(f"\n[bold {colors['error']}]Failed to fetch library: {e.message}[/bold {colors['error']}]")
+        return
+    except Exception as e:
+        console.print(f"\n[bold {colors['error']}]Failed to fetch library: {e}[/bold {colors['error']}]")
         return
     
     if not user_papers:
@@ -565,7 +574,10 @@ async def delete_user_papers_menu(console: Console, colors: Dict, user_name: str
                     result = await api_client.remove_from_library(arxiv_id)
                     if result.get("success"):
                         deleted_count += 1
-                except APIClientError:
+                except APIClientError as e:
+                    logger.error(f"Failed to remove paper from library: {e.message}", exc_info=True)
+                    console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}]")
+                except Exception as e:
                     logger.error(f"Failed to remove paper from library: {e}", exc_info=True)
                     console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}]")
         
