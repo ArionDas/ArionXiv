@@ -1,12 +1,12 @@
 # Ignore root project files - only use api/ folder
-requirements.txt
-pyproject.toml
-setup.py
-arionxiv/
-tests/
-venv/
-*.egg-info/
-dist/
-downloads/
-.git/
-.github/
+/requirements.txt
+/pyproject.toml
+/setup.py
+/arionxiv/
+/tests/
+/venv/
+/*.egg-info/
+/dist/
+/downloads/
+/.git/
+/.github/
