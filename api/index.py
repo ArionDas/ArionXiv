@@ -298,7 +298,8 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
 async def get_daily_analysis(current_user: dict = Depends(verify_token)):
     db = get_db()
     today = datetime.utcnow().strftime("%Y-%m-%d")
-    dose = db.daily_doses.find_one({
+    # Note: collection is 'daily_dose' (not 'daily_doses') to match service
+    dose = db.daily_dose.find_one({
         "user_id": current_user["user_id"],
         "date": today
     })
