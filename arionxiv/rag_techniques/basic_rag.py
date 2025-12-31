@@ -401,6 +401,9 @@ class BasicRAG:
         self._session_embeddings: Dict[str, Dict[str, Any]] = {}
         self._current_session_id: Optional[str] = None
         
+        # In-memory session storage (fallback when database unavailable)
+        self._in_memory_sessions: Dict[str, Dict[str, Any]] = {}
+        
         self.console = Console()
         
         logger.info("BasicRAG initialized (embedding providers lazy-loaded)")
@@ -882,15 +885,22 @@ class BasicRAG:
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
-            # Generate embeddings and store in memory - with progress bar
-            paper_text = self._extract_paper_text(paper)
-            if paper_text:
-                await self.add_document_to_index_with_progress(
-                    paper_id,
-                    paper_text,
-                    {'type': 'paper', 'title': paper.get('title', '')},
-                    console=self.console
-                )
+            # Check if cached embeddings were passed (already fetched from DB)
+            cached_embeddings = paper.get('_cached_embeddings')
+            if cached_embeddings:
+                # Load cached embeddings directly into session memory
+                await self._load_embeddings_from_cache(cached_embeddings)
+                logger.info(f"Loaded {len(cached_embeddings)} pre-cached embeddings for paper {paper_id}")
+            else:
+                # Generate embeddings and store in memory - with progress bar
+                paper_text = self._extract_paper_text(paper)
+                if paper_text:
+                    await self.add_document_to_index_with_progress(
+                        paper_id,
+                        paper_text,
+                        {'type': 'paper', 'title': paper.get('title', '')},
+                        console=self.console
+                    )
             
             # Create unique session ID
             import uuid
@@ -909,7 +919,14 @@ class BasicRAG:
                 'messages': []
             }
             
-            await self.db_service.insert_one(self.chat_collection, session_doc)
+            # Store in-memory as fallback (always works)
+            self._in_memory_sessions[session_id] = session_doc
+            
+            # Try to persist to database (may fail if no connection)
+            try:
+                await self.db_service.insert_one(self.chat_collection, session_doc)
+            except Exception as db_err:
+                logger.debug(f"Session not saved to database (using in-memory): {db_err}")
             
             self.console.print(Panel(
                 f"[bold {colors['primary']}]Chat Session Started[/bold {colors['primary']}]\n"
@@ -1063,7 +1080,17 @@ class BasicRAG:
     async def _chat_with_session(self, session_id: str, message: str) -> Dict[str, Any]:
         """Process a chat message and generate response"""
         try:
-            session = await self.db_service.find_one(self.chat_collection, {'session_id': session_id})
+            # Try database first, fall back to in-memory
+            session = None
+            try:
+                session = await self.db_service.find_one(self.chat_collection, {'session_id': session_id})
+            except Exception:
+                pass
+            
+            # Fall back to in-memory session
+            if not session:
+                session = self._in_memory_sessions.get(session_id)
+            
             if not session:
                 return {'success': False, 'error': 'Session not found'}
             
@@ -1103,21 +1130,33 @@ class BasicRAG:
             if not success:
                 return {'success': False, 'error': error_msg or 'Failed to generate response'}
             
-            await self.db_service.update_one(
-                self.chat_collection,
-                {'session_id': session_id},
-                {
-                    '$push': {
-                        'messages': {
-                            '$each': [
-                                {'type': 'user', 'content': message, 'timestamp': datetime.utcnow()},
-                                {'type': 'assistant', 'content': response_text, 'timestamp': datetime.utcnow()}
-                            ]
-                        }
-                    },
-                    '$set': {'last_activity': datetime.utcnow()}
-                }
-            )
+            # Update in-memory session
+            if session_id in self._in_memory_sessions:
+                self._in_memory_sessions[session_id]['messages'].extend([
+                    {'type': 'user', 'content': message, 'timestamp': datetime.utcnow()},
+                    {'type': 'assistant', 'content': response_text, 'timestamp': datetime.utcnow()}
+                ])
+                self._in_memory_sessions[session_id]['last_activity'] = datetime.utcnow()
+            
+            # Try to persist to database (may fail)
+            try:
+                await self.db_service.update_one(
+                    self.chat_collection,
+                    {'session_id': session_id},
+                    {
+                        '$push': {
+                            'messages': {
+                                '$each': [
+                                    {'type': 'user', 'content': message, 'timestamp': datetime.utcnow()},
+                                    {'type': 'assistant', 'content': response_text, 'timestamp': datetime.utcnow()}
+                                ]
+                            }
+                        },
+                        '$set': {'last_activity': datetime.utcnow()}
+                    }
+                )
+            except Exception:
+                pass  # In-memory session is already updated
             
             return {
                 'success': True,

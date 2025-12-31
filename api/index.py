@@ -60,7 +60,7 @@ def create_token(user_data: dict) -> str:
         "user_id": str(user_data.get("_id")),
         "email": user_data.get("email"),
         "user_name": user_data.get("user_name"),
-        "exp": datetime.utcnow() + timedelta(hours=24),
+        "exp": datetime.utcnow() + timedelta(days=30),  # 30-day token validity
         "iat": datetime.utcnow()
     }
     return jwt.encode(payload, get_secret(), algorithm="HS256")
