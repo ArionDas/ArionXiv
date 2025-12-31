@@ -59,6 +59,11 @@ async def get_users_for_hour(hour: int) -> List[Dict[str, Any]]:
         # 2. Scheduled time starts with the current hour
         query = {
             "$or": [
+                # Vercel API format: settings.daily_dose.enabled and settings.daily_dose.scheduled_time
+                {
+                    "settings.daily_dose.enabled": True,
+                    "settings.daily_dose.scheduled_time": {"$regex": f"^{hour_prefix}"}
+                },
                 # New format: preferences.daily_dose.enabled and preferences.daily_dose.scheduled_time
                 {
                     "preferences.daily_dose.enabled": True,
