@@ -191,7 +191,7 @@ class ArionXivAPIClient:
     async def get_profile(self) -> Dict[str, Any]:
         """Get current user profile"""
         response = await self.httpx_client.get(
-            "/user/profile",
+            "/auth/profile",
             headers=self._get_headers()
         )
         return await self._handle_response(response)
@@ -199,7 +199,7 @@ class ArionXivAPIClient:
     async def get_settings(self) -> Dict[str, Any]:
         """Get user settings"""
         response = await self.httpx_client.get(
-            "/user/settings",
+            "/settings",
             headers=self._get_headers()
         )
         return await self._handle_response(response)
@@ -207,7 +207,7 @@ class ArionXivAPIClient:
     async def update_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Update user settings"""
         response = await self.httpx_client.put(
-            "/user/settings",
+            "/settings",
             json=settings,
             headers=self._get_headers()
         )
@@ -284,15 +284,23 @@ class ArionXivAPIClient:
     async def add_to_library(
         self,
         arxiv_id: str,
+        title: str = "",
+        authors: List[str] = None,
+        categories: List[str] = None,
+        abstract: str = "",
         tags: List[str] = None,
-        notes: str = None
+        notes: str = ""
     ) -> Dict[str, Any]:
         """Add paper to library"""
         response = await self.httpx_client.post(
-            "/library/add",
+            "/library",
             json={
                 "arxiv_id": arxiv_id,
-                "tags": tags,
+                "title": title,
+                "authors": authors or [],
+                "categories": categories or [],
+                "abstract": abstract,
+                "tags": tags or [],
                 "notes": notes
             },
             headers=self._get_headers()
@@ -401,7 +409,7 @@ class ArionXivAPIClient:
             params["date"] = date
         
         response = await self.httpx_client.get(
-            "/analysis/daily",
+            "/daily",
             params=params,
             headers=self._get_headers()
         )

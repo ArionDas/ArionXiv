@@ -16,6 +16,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ..utils.api_client import api_client, APIClientError
 from ...services.unified_user_service import unified_user_service
+from ...services.unified_database_service import unified_database_service
 from ...services.unified_analysis_service import rag_chat_system
 from ...arxiv_operations.client import arxiv_client
 from ...arxiv_operations.fetcher import arxiv_fetcher
@@ -40,6 +41,12 @@ async def run_chat_command(paper_id: Optional[str] = None):
     """Main chat command interface"""
     console = create_themed_console()
     colors = get_theme_colors()
+    
+    # Initialize database connection for RAG session management
+    try:
+        await unified_database_service.connect_mongodb()
+    except Exception as e:
+        logger.warning(f"Database connection failed: {e}. Chat sessions will be stored in memory only.")
     
     console.print(Panel(
         f"[bold {colors['primary']}]ArionXiv Chat System[/bold {colors['primary']}]\n"
@@ -424,7 +431,13 @@ async def _fetch_paper_by_id(console: Console, colors: Dict, arxiv_id: str) -> O
 
 
 async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str, paper: Dict[str, Any]):
-    """Start chat session with selected paper"""
+    """Start chat session with selected paper
+    
+    Flow:
+    1. Check if embeddings are cached in DB (24hr TTL)
+    2. If cached: load from DB, skip PDF download
+    3. If not cached: download PDF, extract text, compute embeddings
+    """
     
     raw_arxiv_id = paper.get('arxiv_id') or paper.get('id', '')
     arxiv_id = ArxivUtils.normalize_arxiv_id(raw_arxiv_id)
@@ -432,25 +445,56 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
     
     left_to_right_reveal(console, f"\nSelected: {title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    pdf_url = paper.get('pdf_url')
-    if not pdf_url:
-        left_to_right_reveal(console, "No PDF URL found for paper", style=f"bold {colors['error']}", duration=0.5)
-        return
+    # Check for cached embeddings in DB first
+    from ...services.unified_database_service import unified_database_service
+    cached_embeddings = None
+    try:
+        vector_collection = "paper_embeddings"
+        cached = await unified_database_service.find_many(
+            vector_collection,
+            {'doc_id': arxiv_id, 'expires_at': {'$gt': __import__('datetime').datetime.utcnow()}},
+            limit=10000
+        )
+        if cached and len(cached) > 0:
+            cached_embeddings = cached
+            left_to_right_reveal(console, f"Loading cached embeddings ({len(cached)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
+    except Exception as e:
+        logger.debug(f"Could not check cached embeddings: {e}")
     
-    left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
-    pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, arxiv_id, pdf_url)
-    
-    if not pdf_path:
-        left_to_right_reveal(console, "Failed to download PDF", style=f"bold {colors['error']}", duration=0.5)
-        return
-    
-    left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
-    from ...services.unified_pdf_service import pdf_processor
-    text_content = await pdf_processor.extract_text(pdf_path)
-    
-    if not text_content:
-        left_to_right_reveal(console, "Failed to extract text from PDF", style=f"bold {colors['error']}", duration=0.5)
-        return
+    text_content = None
+    if not cached_embeddings:
+        # No cache - need to download and process PDF
+        pdf_url = paper.get('pdf_url')
+        if not pdf_url:
+            # Saved papers may not have pdf_url - fetch from arXiv
+            left_to_right_reveal(console, "Fetching paper info from arXiv...", style=f"bold {colors['primary']}", duration=0.5)
+            arxiv_paper = arxiv_client.get_paper_by_id(arxiv_id)
+            if arxiv_paper:
+                pdf_url = arxiv_paper.get('pdf_url')
+                paper.update({
+                    'pdf_url': pdf_url,
+                    'summary': arxiv_paper.get('summary', paper.get('abstract', '')),
+                    'authors': arxiv_paper.get('authors', paper.get('authors', []))
+                })
+        
+        if not pdf_url:
+            left_to_right_reveal(console, "Could not find PDF URL for this paper", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
+        pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, arxiv_id, pdf_url)
+        
+        if not pdf_path:
+            left_to_right_reveal(console, "Failed to download PDF", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
+        from ...services.unified_pdf_service import pdf_processor
+        text_content = await pdf_processor.extract_text(pdf_path)
+        
+        if not text_content:
+            left_to_right_reveal(console, "Failed to extract text from PDF", style=f"bold {colors['error']}", duration=0.5)
+            return
     
     paper_info = {
         'arxiv_id': arxiv_id,
@@ -458,8 +502,8 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
         'authors': paper.get('authors', []),
         'abstract': paper.get('summary', paper.get('abstract', '')),
         'published': paper.get('published', ''),
-        'pdf_path': pdf_path,
-        'full_text': text_content
+        'full_text': text_content or '',  # Empty if using cached embeddings
+        '_cached_embeddings': cached_embeddings  # Pass cached embeddings to RAG
     }
     
     left_to_right_reveal(console, "\nStarting chat session...\n", style=f"bold {colors['primary']}", duration=0.5)

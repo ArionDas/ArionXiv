@@ -393,23 +393,22 @@ def authors_config(add: tuple, remove: tuple, clear: bool):
 @click.option('--keywords', help='Set keywords (comma-separated)')
 @click.option('--show', is_flag=True, help='Show current daily dose settings')
 def daily_config(enable: Optional[bool], time_str: Optional[str], papers: Optional[int], keywords: Optional[str], show: bool):
-    """Configure daily dose settings"""
+    """Configure daily dose settings via Vercel API"""
     
     async def _daily():
         await _ensure_authenticated()
         
-        # Import daily dose service - uses API for remote settings
-        from ...services.unified_daily_dose_service import unified_daily_dose_service
+        # Use api_client for Vercel API consistency
+        from ..utils.api_client import api_client
         
         print_header(console, "Daily Dose Configuration")
         
-        user = unified_user_service.get_current_user()
-        user_id = user['id']
         colors = get_theme_colors()
         
-        # Load current settings
-        settings_result = await unified_daily_dose_service.get_user_daily_dose_settings(user_id)
-        current_settings = settings_result.get("settings", {})
+        # Load current settings from Vercel API
+        settings_result = await api_client.get_settings()
+        all_settings = settings_result.get("settings", {}) if settings_result.get("success") else {}
+        current_settings = all_settings.get("daily_dose", {})
         
         # Show current settings if requested or no changes
         if show or (enable is None and time_str is None and papers is None and keywords is None):
@@ -437,7 +436,7 @@ def daily_config(enable: Optional[bool], time_str: Optional[str], papers: Option
             
             # Interactive mode
             console.print(f"\n[bold {colors['primary']}]Configure Daily Dose:[/bold {colors['primary']}]")
-            await _interactive_daily_dose_config(user_id, current_settings, unified_daily_dose_service)
+            await _interactive_daily_dose_config_api(current_settings, all_settings, api_client)
             return
         
         # Handle CLI options
@@ -472,21 +471,15 @@ def daily_config(enable: Optional[bool], time_str: Optional[str], papers: Option
             changes_made = True
         
         if changes_made:
-            result = await unified_daily_dose_service.update_user_daily_dose_settings(user_id, **update_kwargs)
-            if result["success"]:
+            # Merge with existing settings and update via Vercel API
+            new_daily_dose = {**current_settings, **update_kwargs}
+            all_settings["daily_dose"] = new_daily_dose
+            result = await api_client.update_settings(all_settings)
+            
+            if result.get("success"):
                 print_success(console, "Daily dose settings updated successfully")
-                
-                # If enabling and time is set, schedule the job
-                if enable and (time_str or current_settings.get("scheduled_time")):
-                    schedule_time = time_str or current_settings.get("scheduled_time")
-                    if schedule_user_daily_dose:
-                        schedule_result = await schedule_user_daily_dose(user_id, schedule_time)
-                        if schedule_result.get("success"):
-                            print_success(console, f"Daily dose scheduled for {schedule_time}")
-                        else:
-                            print_warning(console, f"Could not schedule: {schedule_result.get('error', 'Unknown error')}")
             else:
-                print_error(console, f"Failed to update settings: {result.get('message')}")
+                print_error(console, f"Failed to update settings: {result.get('message', 'Unknown error')}")
     
     asyncio.run(_daily())
 
@@ -1210,6 +1203,88 @@ async def _interactive_daily_dose_config(user_id: str, current_settings: Dict[st
         
         elif choice == "5":
             # Show main menu / command suggestions before exiting
+            show_command_suggestions(console, context='settings')
+            break
+
+
+async def _interactive_daily_dose_config_api(current_settings: Dict[str, Any], all_settings: Dict[str, Any], api_client):
+    """Interactive daily dose configuration using Vercel API"""
+    
+    colors = get_theme_colors()
+    
+    while True:
+        # Get current values for display
+        enabled = current_settings.get("enabled", False)
+        scheduled_time = current_settings.get("scheduled_time", "08:00") or "08:00"
+        max_papers = current_settings.get("max_papers", 5)
+        keywords = current_settings.get("keywords", [])
+        keywords_str = ", ".join(keywords[:3]) + ("..." if len(keywords) > 3 else "") if keywords else "None"
+        
+        console.print(f"\n[bold {colors['primary']}]Options:[/bold {colors['primary']}]")
+        console.print(f"[bold {colors['primary']}]1.[/bold {colors['primary']}] Toggle enabled/disabled [white](current: {'Enabled' if enabled else 'Disabled'})[/white]")
+        console.print(f"[bold {colors['primary']}]2.[/bold {colors['primary']}] Set scheduled time (UTC) [white](current: {scheduled_time})[/white]")
+        console.print(f"[bold {colors['primary']}]3.[/bold {colors['primary']}] Set max papers (1-10) [white](current: {max_papers})[/white]")
+        console.print(f"[bold {colors['primary']}]4.[/bold {colors['primary']}] Set keywords [white](current: {keywords_str})[/white]")
+        console.print(f"[bold {colors['primary']}]5.[/bold {colors['primary']}] Done - Return to main menu")
+        
+        choice = Prompt.ask(f"[bold {colors['primary']}]Select option[/bold {colors['primary']}]", choices=["1", "2", "3", "4", "5"], default="5")
+        
+        if choice == "1":
+            new_enabled = not enabled
+            current_settings["enabled"] = new_enabled
+            all_settings["daily_dose"] = current_settings
+            result = await api_client.update_settings(all_settings)
+            if result.get("success"):
+                status = "enabled" if new_enabled else "disabled"
+                print_success(console, f"Daily dose {status}")
+            else:
+                current_settings["enabled"] = enabled  # Revert on failure
+                print_error(console, f"Failed to update: {result.get('message', 'Unknown error')}")
+        
+        elif choice == "2":
+            console.print(f"[white]Note: Time is in UTC timezone. Your daily dose will run at this UTC time.[/white]")
+            new_time = Prompt.ask(f"[bold {colors['primary']}]Enter time in UTC (HH:MM)[/bold {colors['primary']}]", default=scheduled_time)
+            try:
+                datetime.strptime(new_time, "%H:%M")
+                current_settings["scheduled_time"] = new_time
+                all_settings["daily_dose"] = current_settings
+                result = await api_client.update_settings(all_settings)
+                if result.get("success"):
+                    print_success(console, f"Scheduled time set to {new_time} UTC")
+                else:
+                    current_settings["scheduled_time"] = scheduled_time  # Revert on failure
+                    print_error(console, f"Failed to update: {result.get('message', 'Unknown error')}")
+            except ValueError:
+                print_error(console, "Invalid time format. Use HH:MM")
+        
+        elif choice == "3":
+            new_max = IntPrompt.ask(f"[bold {colors['primary']}]Enter max papers (1-10)[/bold {colors['primary']}]", default=max_papers)
+            if 1 <= new_max <= 10:
+                current_settings["max_papers"] = new_max
+                all_settings["daily_dose"] = current_settings
+                result = await api_client.update_settings(all_settings)
+                if result.get("success"):
+                    print_success(console, f"Max papers set to {new_max}")
+                else:
+                    current_settings["max_papers"] = max_papers  # Revert on failure
+                    print_error(console, f"Failed to update: {result.get('message', 'Unknown error')}")
+            else:
+                print_error(console, "Max papers must be between 1 and 10")
+        
+        elif choice == "4":
+            console.print(f"\n[bold {colors['primary']}]Current keywords:[/bold {colors['primary']}] {', '.join(keywords) if keywords else 'None'}")
+            new_keywords_str = Prompt.ask(f"[bold {colors['primary']}]Enter keywords (space-separated)[/bold {colors['primary']}]", default=" ".join(keywords))
+            new_keywords = [k.strip() for k in new_keywords_str.split() if k.strip()]
+            current_settings["keywords"] = new_keywords
+            all_settings["daily_dose"] = current_settings
+            result = await api_client.update_settings(all_settings)
+            if result.get("success"):
+                print_success(console, f"Keywords updated: {' '.join(new_keywords)}")
+            else:
+                current_settings["keywords"] = keywords  # Revert on failure
+                print_error(console, f"Failed to update: {result.get('message', 'Unknown error')}")
+        
+        elif choice == "5":
             show_command_suggestions(console, context='settings')
             break
 

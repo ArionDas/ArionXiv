@@ -303,14 +303,14 @@ async def _display_paper_analysis(paper: dict, colors: dict):
 
 
 async def _show_daily_dashboard():
-    """Show daily dose dashboard via API"""
+    """Show daily dose dashboard via Vercel API"""
     colors = get_theme_colors()
     
     console.print(f"\n[bold {colors['primary']}]Daily Dose Dashboard[/bold {colors['primary']}]")
     console.print("-" * 50)
     
     try:
-        # Get settings from API
+        # Get settings from Vercel API
         settings_result = await api_client.get_settings()
         settings = settings_result.get("settings", {}).get("daily_dose", {}) if settings_result.get("success") else {}
         
