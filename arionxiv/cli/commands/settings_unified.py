@@ -86,8 +86,9 @@ class SettingsGroup(click.Group):
 # MAIN SETTINGS COMMAND
 # ================================
 
-@click.group(cls=SettingsGroup)
-def settings():
+@click.group(cls=SettingsGroup, invoke_without_command=True)
+@click.pass_context
+def settings(ctx):
     """
     ArionXiv Settings - Configure your research experience
     
@@ -104,7 +105,25 @@ def settings():
         arionxiv settings time         # Set daily analysis time
         arionxiv settings papers       # Manage saved papers
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        # Show available subcommands when called without arguments
+        colors = get_theme_colors()
+        console.print(f"\n[bold {colors['primary']}]ArionXiv Settings[/bold {colors['primary']}]")
+        console.rule(style=f"bold {colors['primary']}")
+        console.print(f"\n[bold {colors['primary']}]Available settings commands:[/bold {colors['primary']}]\n")
+        
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Command", style=f"bold {colors['primary']}")
+        table.add_column("Description", style="white")
+        
+        for cmd_name in sorted(ctx.command.list_commands(ctx)):
+            cmd = ctx.command.get_command(ctx, cmd_name)
+            if cmd and not cmd.hidden:
+                help_text = cmd.get_short_help_str(limit=50)
+                table.add_row(f"arionxiv settings {cmd_name}", help_text)
+        
+        console.print(table)
+        console.print(f"\n[bold {colors['primary']}]Example:[/bold {colors['primary']}] arionxiv settings theme\n")
 
 # ================================
 # SHOW ALL SETTINGS
@@ -649,7 +668,7 @@ def _configure_api_key_interactive(provider: str, colors: Dict[str, str]):
         console.print(Panel(
             steps_text,
             title=f"[bold {colors['primary']}]{instructions['title']}[/bold {colors['primary']}]",
-            border_style=colors['primary'],
+            border_style=f"bold {colors['primary']}",
             padding=(1, 2)
         ))
     

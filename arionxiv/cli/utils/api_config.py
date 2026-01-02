@@ -258,7 +258,7 @@ def _show_api_instructions(console_instance: Console, provider: str, colors: Dic
     console_instance.print(Panel(
         steps_text,
         title=f"[bold {colors['primary']}]{instructions['title']}[/bold {colors['primary']}]",
-        border_style=colors['primary'],
+        border_style=f"bold {colors['primary']}",
         padding=(1, 2)
     ))
 
@@ -286,7 +286,7 @@ def run_first_time_api_setup(console_instance: Console = None) -> bool:
         "[white]Your keys are stored securely in ~/.arionxiv/api_keys.json[/white]\n"
         "[white]They persist across sessions - configure once, use forever![/white]",
         title="[bold]First-Time API Setup[/bold]",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     ))
     
     # Ask if user wants to configure now
@@ -312,7 +312,7 @@ def run_first_time_api_setup(console_instance: Console = None) -> bool:
         "API configuration complete!\n\n"
         f"Manage keys anytime with: [{colors['primary']}]arionxiv settings api[/{colors['primary']}]",
         title="[bold]Setup Complete[/bold]",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     ))
     
     return True
@@ -435,7 +435,7 @@ def show_api_status(console_instance: Console = None):
         title="API Configuration Status",
         show_header=True,
         header_style=f"bold {colors['primary']}",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     )
     table.add_column("Provider", style="bold white")
     table.add_column("Status", style="white", width=12)

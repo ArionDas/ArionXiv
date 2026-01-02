@@ -47,20 +47,16 @@ def search_command(keywords: Optional[str], category: Optional[str], author: Opt
     """
     # Check if keywords are provided
     if not keywords and not author:
-        left_to_right_reveal(
-            console, 
-            "Please provide some keywords to search for papers.", 
-            style=f"bold {colors['primary']}", 
-            duration=1.0
-        )
-        console.print()
-        left_to_right_reveal(
-            console,
-            'Example: arionxiv search "transformer attention"',
-            style=f"{colors['primary']}",
-            duration=0.5
-        )
-        return
+        console.print(f"\n[bold {colors['primary']}]ArionXiv Paper Search[/bold {colors['primary']}]")
+        console.rule(style=f"bold {colors['primary']}")
+        console.print(f"\n[bold {colors['primary']}]Enter keywords to search for papers on arXiv.[/bold {colors['primary']}]")
+        console.print(f"[bold {colors['primary']}]Example: transformer attention, neural networks, deep learning[/bold {colors['primary']}]\n")
+        
+        keywords = Prompt.ask(f"[bold {colors['primary']}]Search keywords[/bold {colors['primary']}]")
+        
+        if not keywords.strip():
+            console.print(f"\n[bold {colors['warning']}]No keywords provided. Exiting.[/bold {colors['warning']}]")
+            return
     
     asyncio.run(_search_papers(keywords or "", category, author))
 
@@ -69,10 +65,10 @@ async def _search_papers(keywords: str, category: Optional[str], author: Optiona
     """Execute the paper search"""
     
     logger.info(f"Starting paper search: keywords='{keywords}', category={category}, author={author}")
-    left_to_right_reveal(console, f"Search: [{colors['primary']}]{keywords}[/{colors['primary']}]", style="bold", duration=1.0)
+    left_to_right_reveal(console, f"Search: [bold {colors['primary']}]{keywords}[/bold {colors['primary']}]", style="bold", duration=1.0)
     
     with Progress(
-        TextColumn(f"[{colors['primary']}]Searching arXiv...[/{colors['primary']}]"),
+        TextColumn(f"[bold {colors['primary']}]Searching arXiv...[/bold {colors['primary']}]"),
         "[progress.bar]",
         console=console
     ) as progress:
@@ -131,10 +127,10 @@ async def _display_papers_table_animated(papers):
     def create_table_with_rows(num_rows: int) -> Table:
         table = create_themed_table("Results")
         table.expand = True
-        table.add_column("#", style="bold white", width=4)
-        table.add_column("Title", style="white")
-        table.add_column("Authors", style="white", width=30)
-        table.add_column("Date", style="white", width=12)
+        table.add_column("#", style=f"bold {colors['primary']}", width=4)
+        table.add_column("Title", style=f"bold {colors['primary']}")
+        table.add_column("Authors", style=f"bold {colors['primary']}", width=30)
+        table.add_column("Date", style=f"bold {colors['primary']}", width=12)
         
         for i in range(num_rows):
             paper = papers[i]
@@ -237,22 +233,22 @@ def _display_paper_details(paper):
     
     # Build content for panel
     content_lines = [
-        f"[bold white]{title}[/bold white]\n",
-        f"[{colors['primary']}]Authors:[/{colors['primary']}] {author_str}",
+        f"[bold {colors['primary']}]{title}[/bold {colors['primary']}]\n",
+        f"[bold {colors['primary']}]Authors:[/bold {colors['primary']}] {author_str}",
     ]
     
     if categories_str:
-        content_lines.append(f"[{colors['primary']}]Categories:[/{colors['primary']}] {categories_str}")
+        content_lines.append(f"[bold {colors['primary']}]Categories:[/bold {colors['primary']}] {categories_str}")
     
-    content_lines.append(f"[{colors['primary']}]Published:[/{colors['primary']}] {pub_date}")
+    content_lines.append(f"[bold {colors['primary']}]Published:[/bold {colors['primary']}] {pub_date}")
     
     if arxiv_id:
-        content_lines.append(f"[{colors['primary']}]arXiv ID:[/{colors['primary']}] {arxiv_id}")
-        content_lines.append(f"[{colors['primary']}]URL:[/{colors['primary']}] https://arxiv.org/abs/{arxiv_id}")
+        content_lines.append(f"[bold {colors['primary']}]arXiv ID:[/bold {colors['primary']}] {arxiv_id}")
+        content_lines.append(f"[bold {colors['primary']}]URL:[/bold {colors['primary']}] https://arxiv.org/abs/{arxiv_id}")
     
-    content_lines.append(f"\n[{colors['primary']}]Abstract:[/{colors['primary']}]")
+    content_lines.append(f"\n[bold {colors['primary']}]Abstract:[/bold {colors['primary']}]")
     content_lines.append(abstract)
     
     content = "\n".join(content_lines)
     
-    console.print(Panel(content, title="Selected Paper", border_style=colors['primary']))
+    console.print(Panel(content, title=f"[bold {colors['primary']}]Selected Paper[/bold {colors['primary']}]", border_style=f"bold {colors['primary']}"))

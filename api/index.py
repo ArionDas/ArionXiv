@@ -108,6 +108,11 @@ class LibraryAddRequest(BaseModel):
     tags: List[str] = []
     notes: str = ""
 
+class ChatSessionRequest(BaseModel):
+    paper_id: str
+    title: Optional[str] = None
+    paper_title: Optional[str] = None
+
 # Endpoints
 
 @app.get("/")
@@ -292,6 +297,30 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
     for s in sessions:
         s["_id"] = str(s["_id"])
     return {"success": True, "sessions": sessions}
+
+@app.post("/chat/session")
+async def create_chat_session(request: ChatSessionRequest, current_user: dict = Depends(verify_token)):
+    db = get_db()
+    session_data = {
+        "user_id": current_user["user_id"],
+        "paper_id": request.paper_id,
+        "title": request.title or request.paper_title,
+        "paper_title": request.paper_title or request.title,
+        "messages": [],
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    result = db.chat_sessions.insert_one(session_data)
+    return {"success": True, "session_id": str(result.inserted_id)}
+
+@app.put("/chat/session/{session_id}")
+async def update_chat_session(session_id: str, messages: List[dict], current_user: dict = Depends(verify_token)):
+    db = get_db()
+    db.chat_sessions.update_one(
+        {"_id": ObjectId(session_id), "user_id": current_user["user_id"]},
+        {"$set": {"messages": messages, "updated_at": datetime.utcnow()}}
+    )
+    return {"success": True, "message": "Session updated"}
 
 # Daily analysis
 @app.get("/daily")

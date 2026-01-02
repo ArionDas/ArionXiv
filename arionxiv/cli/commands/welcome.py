@@ -40,14 +40,14 @@ def show_logo_and_features(console_instance=None, animate: bool = True):
     
     if animate:
         # Step 1: SLAM THE LOGO onto screen with impact!
-        slam_content(console_instance, logo, style=f"bold {primary_color}", duration=2.0)
+        slam_content(console_instance, logo, style=f"bold {primary_color}", duration=1.0)
         
         # Step 2: REVEAL TAGLINE LEFT TO RIGHT
         console_instance.print()
         tagline = "It would not take all night long on the internet anymore"
-        left_to_right_reveal(console_instance, tagline, style=f"bold {primary_color}", duration=2.0)
+        left_to_right_reveal(console_instance, tagline, style=f"bold {primary_color}", duration=0.5)
         tagline = "A humble effort to bring down time taken to read academic papers"
-        left_to_right_reveal(console_instance, tagline, style=f"bold {primary_color}", duration=2.0)
+        left_to_right_reveal(console_instance, tagline, style=f"bold {primary_color}", duration=0.5)
         print("\n")
     else:
         logo_text = Text(logo, style=f"bold {primary_color}")
@@ -110,18 +110,18 @@ Personalize your experience:
 [bold {primary_color}]arionxiv settings theme[/bold {primary_color}]  Change theme
 [bold {primary_color}]arionxiv preferences[/bold {primary_color}]     Set interests"""
     
-    daily_panel = Panel(daily_commands, title=f"[bold {primary_color}]Daily Dose[/bold {primary_color}]", border_style=primary_color, width=panel_width, height=panel_height)
-    chat_panel = Panel(chat_commands, title=f"[bold {primary_color}]PDF & Paper Chat[/bold {primary_color}]", border_style=primary_color, width=panel_width, height=panel_height)
-    research_panel = Panel(research_commands, title=f"[bold {primary_color}]Research & Analysis[/bold {primary_color}]", border_style=primary_color, width=panel_width, height=panel_height)
-    settings_panel = Panel(settings_commands, title=f"[bold {primary_color}]Settings & Preferences[/bold {primary_color}]", border_style=primary_color, width=panel_width, height=panel_height)
+    daily_panel = Panel(daily_commands, title=f"[bold {primary_color}]Daily Dose[/bold {primary_color}]", border_style=f"bold {primary_color}", width=panel_width, height=panel_height)
+    chat_panel = Panel(chat_commands, title=f"[bold {primary_color}]PDF & Paper Chat[/bold {primary_color}]", border_style=f"bold {primary_color}", width=panel_width, height=panel_height)
+    research_panel = Panel(research_commands, title=f"[bold {primary_color}]Research & Analysis[/bold {primary_color}]", border_style=f"bold {primary_color}", width=panel_width, height=panel_height)
+    settings_panel = Panel(settings_commands, title=f"[bold {primary_color}]Settings & Preferences[/bold {primary_color}]", border_style=f"bold {primary_color}", width=panel_width, height=panel_height)
     
     # Step 3: SLAM FEATURE BOXES onto screen one by one!
     if animate:
         row1 = Columns([daily_panel, chat_panel], equal=True)
-        slam_columns(console_instance, row1, duration=1.0)
+        slam_columns(console_instance, row1, duration=0.5)
         
         row2 = Columns([research_panel, settings_panel], equal=True)
-        slam_columns(console_instance, row2, duration=1.0)
+        slam_columns(console_instance, row2, duration=0.5)
     else:
         console_instance.print(Columns([daily_panel, chat_panel], equal=True))
         console_instance.print(Columns([research_panel, settings_panel], equal=True))
@@ -149,12 +149,12 @@ Personalize your experience:
         quick_start_lines = quick_start_content.strip().split('\n')
         for line in quick_start_lines:
             console_instance.print(line)
-            time.sleep(0.4)
+            time.sleep(0.2)
         print("\n")
         tips_lines = tips_content.strip().split('\n')
         for line in tips_lines:
             console_instance.print(line)
-            time.sleep(0.4)
+            time.sleep(0.2)
     else:
         console_instance.print(quick_start_content)
         console_instance.print(tips_content)

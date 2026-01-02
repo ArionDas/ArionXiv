@@ -142,7 +142,7 @@ def create_themed_table(title: str = None, show_header: bool = True):
         title=title,
         show_header=show_header,
         header_style=f"bold {colors['primary']}",
-        border_style=colors['primary'],
+        border_style=f"bold {colors['primary']}",
         title_style=f"bold {colors['primary']}"
     )
     return table
@@ -151,7 +151,7 @@ def create_themed_panel(content: str, title: str = None, border_style: str = Non
     """Create a panel with current theme"""
     colors = get_theme_colors()
     if border_style is None:
-        border_style = colors['primary']
+        border_style = f"bold {colors['primary']}"
     
     return Panel(
         content,
@@ -212,7 +212,7 @@ def display_theme_preview(console: Console, theme_name: str, theme_data: Dict[st
     return Panel(
         preview,
         title=f"[bold {primary}]{theme_data['name']}[/bold {primary}]",
-        border_style=primary,
+        border_style=f"bold {primary}",
         padding=(0, 2)
     )
 

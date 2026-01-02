@@ -360,13 +360,15 @@ class UnifiedDailyDoseService:
             # Rate limit before API call
             await asyncio.sleep(self.arxiv_delay)
             
-            # Search arXiv
+            # Search arXiv - sort by SubmittedDate (descending) to get most recent papers
+            import arxiv
             papers = arxiv_client.search_papers(
                 query=full_query,
-                max_results=min(max_papers * 2, 20)  # Fetch extra to allow filtering
+                max_results=min(max_papers * 2, 20),  # Fetch extra to allow filtering
+                sort_by=arxiv.SortCriterion.SubmittedDate  # Most recent first!
             )
             
-            # Filter to most relevant and limit
+            # Filter to most recent papers and limit
             papers = papers[:max_papers]
             
             return papers

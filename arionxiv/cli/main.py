@@ -22,8 +22,6 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.align import Align
 from .commands.search import search_command
-from .commands.fetch import fetch_command
-from .commands.analyze import analyze_command
 from .commands.chat import chat_command
 from .commands.daily import daily_command
 from .commands.library import library_command
@@ -56,7 +54,7 @@ def _display_themed_help(ctx, cmd_or_group, is_group=True):
     header_text = Text("ARIONXIV", style=f"bold {primary}")
     console.print(Align.right(header_text))
     # Draw horizontal line spanning the entire terminal
-    console.print(f"[{primary}]{'─' * terminal_width}[/{primary}]")
+    console.rule(style=f"bold {primary}")
     console.print()
     
     # Display usage - always use full command path (e.g., "arionxiv settings" not just "settings")
@@ -74,7 +72,7 @@ def _display_themed_help(ctx, cmd_or_group, is_group=True):
     
     if is_group:
         prog_name = normalize_prog_name(ctx.command_path or ctx.info_name)
-        usage_text = f"Usage: [{primary}]{prog_name}[/{primary}] [OPTIONS] COMMAND [ARGS]..."
+        console.print(f"[bold]Usage:[/bold] [bold {primary}]{prog_name}[/bold {primary}] [OPTIONS] [bold {primary}]COMMAND[/bold {primary}] [ARGS]...")
     else:
         prog_name = normalize_prog_name(ctx.command_path or ctx.info_name)
         # Build usage with argument placeholders
@@ -85,15 +83,14 @@ def _display_themed_help(ctx, cmd_or_group, is_group=True):
                     args_str += f" {param.name.upper()}"
                 else:
                     args_str += f" [{param.name.upper()}]"
-        usage_text = f"Usage: [{primary}]{prog_name}[/{primary}] [OPTIONS]{args_str}"
+        console.print(f"[bold]Usage:[/bold] [bold {primary}]{prog_name}[/bold {primary}] [OPTIONS]{args_str}")
     
-    # Animate the usage text (the function prints the final text)
-    left_to_right_reveal(console, usage_text.replace(f"[{primary}]", "").replace(f"[/{primary}]", ""), style="white", duration=0.3)
     console.print()
     
-    # Display description
+    # Display description (skip for main CLI with minimal docstring)
     help_text = cmd_or_group.help or ""
-    if help_text:
+    # Skip if just the minimal main CLI docstring
+    if help_text and help_text.strip() not in ["ArionXiv CLI", ""]:
         for line in help_text.strip().split('\n'):
             # Color commands in quick access section (lines starting with 'arionxiv')
             stripped = line.strip()
@@ -335,11 +332,7 @@ class ThemedGroup(click.Group):
 @click.option('--version', is_flag=True, help='Show version information')
 @click.pass_context
 def cli(ctx, version):
-    """
-    ArionXiv CLI - AI-Powered Research Paper Analysis
-    
-    A powerful terminal interface for discovering, analyzing, and chatting with research papers.
-    """
+    """ArionXiv CLI"""
     if version:
         console.print(style_text("ArionXiv CLI v1.0.0", "success"))
         return
@@ -399,8 +392,6 @@ async def _handle_main_flow():
 # Register all commands
 cli.add_command(welcome, name="welcome")
 cli.add_command(search_command, name="search")
-cli.add_command(fetch_command, name="fetch")
-cli.add_command(analyze_command, name="analyze")
 cli.add_command(chat_command, name="chat")
 cli.add_command(daily_command, name="daily")
 cli.add_command(library_command, name="library")
@@ -411,18 +402,6 @@ cli.add_command(logout_command, name="logout")
 cli.add_command(register_command, name="register")
 cli.add_command(session_command, name="session")
 cli.add_command(auth_command, name="auth")  # Hidden, for backward compatibility
-
-
-# Create a preferences alias that redirects to settings prefs
-@click.command('preferences')
-@click.pass_context
-def preferences_redirect(ctx):
-    """Configure paper preferences (alias for 'settings prefs')"""
-    console.print(f"[{get_theme_colors()['primary']}]Redirecting to settings prefs...[/{get_theme_colors()['primary']}]\n")
-    ctx.invoke(settings.commands['prefs'])
-
-
-cli.add_command(preferences_redirect, name="preferences")
 
 if __name__ == "__main__":
     cli()
