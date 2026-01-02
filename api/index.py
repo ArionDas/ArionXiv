@@ -298,11 +298,6 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
         s["_id"] = str(s["_id"])
     return {"success": True, "sessions": sessions}
 
-class ChatSessionRequest(BaseModel):
-    paper_id: str
-    title: str = ""
-    paper_title: str = ""
-
 @app.post("/chat/session")
 async def create_chat_session(request: ChatSessionRequest, current_user: dict = Depends(verify_token)):
     db = get_db()
