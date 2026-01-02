@@ -110,12 +110,13 @@ Abstract: {abstract}
 
 Provide a structured analysis with the following sections:
 1. SUMMARY: A concise 2-3 sentence summary of the paper's main contribution.
-2. KEY FINDINGS: List the 3-4 most important findings or contributions.
+2. KEY FINDINGS: List the 3-4 most important findings or contributions (as numbered items).
 3. METHODOLOGY: Brief description of the approach or methods used.
 4. SIGNIFICANCE: Why this paper matters and its potential impact.
 5. LIMITATIONS: Any noted limitations or areas for future work.
 6. RELEVANCE SCORE: Rate from 1-10 how impactful this paper is for practitioners.
 
+IMPORTANT: Do NOT use any markdown formatting (no asterisks, no bold, no headers). Write in plain text only.
 Be concise but thorough. Focus on actionable insights.""",
 
     "trend_analysis": """You are a research trend analyst. Based on the following research papers, generate insights about current trends and directions.

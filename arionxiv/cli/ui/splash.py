@@ -58,7 +58,7 @@ def show_splash():
         
 [white]Type [bold]arionxiv <command> --help[/bold] for detailed usage[/white]""",
         title="Get Started",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     )
     
     console.print()
@@ -84,6 +84,6 @@ def show_welcome_message():
         "Your AI-powered research companion in the terminal.\n"
         "Type [bold]arionxiv --help[/bold] to get started.",
         title="Welcome",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     )
     console.print(welcome)

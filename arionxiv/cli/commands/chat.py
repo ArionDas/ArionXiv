@@ -52,7 +52,7 @@ async def run_chat_command(paper_id: Optional[str] = None):
         f"[bold {colors['primary']}]ArionXiv Chat System[/bold {colors['primary']}]\n"
         f"[bold {colors['primary']}]Intelligent chat with your research papers[/bold {colors['primary']}]",
         title=f"[bold {colors['primary']}]Chat Interface[/bold {colors['primary']}]",
-        border_style=colors['primary']
+        border_style=f"bold {colors['primary']}"
     ))
     
     try:
@@ -89,7 +89,7 @@ async def run_chat_command(paper_id: Optional[str] = None):
         console.print(Panel(
             f"[bold {colors['error']}]Error: {str(e)}[/bold {colors['error']}]",
             title=f"[bold {colors['error']}]Chat Error[/bold {colors['error']}]",
-            border_style=colors['error']
+            border_style=f"bold {colors['error']}"
         ))
         logger.error(f"Chat command error: {str(e)}", exc_info=True)
 

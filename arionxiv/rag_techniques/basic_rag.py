@@ -682,7 +682,7 @@ class BasicRAG:
                 transient=False
             ) as progress:
                 task = progress.add_task(
-                    f"[{colors['primary']}]Computing embeddings...",
+                    f"[bold {colors['primary']}]Computing embeddings...",
                     total=total_chunks
                 )
                 
@@ -922,11 +922,32 @@ class BasicRAG:
             # Store in-memory as fallback (always works)
             self._in_memory_sessions[session_id] = session_doc
             
-            # Try to persist to database (may fail if no connection)
+            # Try to persist to Vercel API first (cloud storage)
+            session_saved = False
+            try:
+                from ..cli.utils.api_client import api_client
+                api_result = await api_client.create_chat_session(
+                    paper_id=paper_id,
+                    title=paper.get('title', paper_id)
+                )
+                if api_result.get("success"):
+                    logger.info(f"Chat session saved to cloud: {api_result.get('session_id')}")
+                    session_saved = True
+                else:
+                    logger.warning(f"API returned failure: {api_result}")
+            except Exception as api_err:
+                logger.warning(f"Session not saved to API: {api_err}")
+            
+            # Also try local database as backup (regardless of API success)
             try:
                 await self.db_service.insert_one(self.chat_collection, session_doc)
+                logger.info(f"Chat session saved to local DB: {session_id}")
+                session_saved = True
             except Exception as db_err:
-                logger.debug(f"Session not saved to database (using in-memory): {db_err}")
+                logger.debug(f"Session not saved to local database: {db_err}")
+            
+            if not session_saved:
+                logger.warning(f"Chat session only stored in-memory: {session_id}")
             
             self.console.print(Panel(
                 f"[bold {colors['primary']}]Chat Session Started[/bold {colors['primary']}]\n"
@@ -1073,7 +1094,7 @@ class BasicRAG:
                 for cmd, desc in commands
             ]),
             title=f"[bold {colors['primary']}]What's Next?[/bold {colors['primary']}]",
-            border_style=colors['primary'],
+            border_style=f"bold {colors['primary']}",
             padding=(1, 2)
         ))
     

@@ -248,7 +248,7 @@ Full Paper Content:
                 f"The analysis could not be completed due to the above issue.\n"
                 f"Please address the error and try again.",
                 title="Analysis Failed",
-                border_style=colors['error']
+                border_style=f"bold {colors['error']}"
             )
             console.print(error_panel)
             return
@@ -319,7 +319,7 @@ def _display_animated_panel(console: Console, content: str, title: str, colors: 
     # Use left_to_right animation for the content
     left_to_right_reveal(console, content, style=colors['primary'])
     # Then display in a panel
-    console.print(Panel(content, border_style=colors['primary'], title=title))
+    console.print(Panel(content, border_style=f"bold {colors['primary']}", title=title))
 
 def _display_analysis_results(metadata: dict, analysis_result: dict, analysis_type: str):
     """Display the analysis results with proper theming"""
@@ -357,7 +357,7 @@ def _display_analysis_results(metadata: dict, analysis_result: dict, analysis_ty
 
 [bold]Published:[/bold] {published}"""
     
-    console.print(Panel(paper_info, border_style=colors['primary'], title=f"[bold {colors['primary']}]Paper Details[/bold {colors['primary']}]"))
+    console.print(Panel(paper_info, border_style=f"bold {colors['primary']}", title=f"[bold {colors['primary']}]Paper Details[/bold {colors['primary']}]"))
     console.print()
     
     # Analysis content - handle both analysis service and direct LLM results

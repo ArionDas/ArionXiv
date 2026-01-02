@@ -132,7 +132,7 @@ def show_command_suggestions(
     console.print(Panel(
         "\n".join(lines),
         title=f"[bold {colors['primary']}]{title}[/bold {colors['primary']}]",
-        border_style=colors['primary'],
+        border_style=f"bold {colors['primary']}",
         padding=(1, 2)
     ))
 

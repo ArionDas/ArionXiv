@@ -82,7 +82,7 @@ async def _show_preferences(user_id: str):
     from ...services.unified_config_service import unified_config_service
     
     console.print(f"\n{style_text('Current Paper Preferences', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     result = await unified_config_service.get_user_preferences(user_id)
     
@@ -142,7 +142,7 @@ async def _configure_categories(user_id: str):
     from ...services.unified_config_service import unified_config_service
     
     console.print(f"\n{style_text('Configure Preferred Categories', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     # Get current preferences
     result = await unified_config_service.get_user_preferences(user_id)
@@ -223,7 +223,7 @@ async def _configure_keywords(user_id: str):
     from ...services.unified_config_service import unified_config_service
     
     console.print(f"\n{style_text('Configure Keywords', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     # Get current preferences
     result = await unified_config_service.get_user_preferences(user_id)
@@ -277,7 +277,7 @@ async def _configure_authors(user_id: str):
     from ...services.unified_config_service import unified_config_service
     
     console.print(f"\n{style_text('Configure Preferred Authors', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     result = await unified_config_service.get_user_preferences(user_id)
     if not result["success"]:
@@ -316,7 +316,7 @@ async def _configure_schedule(user_id: str):
     from ...services.unified_config_service import unified_config_service
     
     console.print(f"\n{style_text('Configure Daily Dose Schedule', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     result = await unified_config_service.get_user_preferences(user_id)
     if not result["success"]:
@@ -398,7 +398,7 @@ async def _show_preferences_menu(user_id: str):
     await _show_preferences(user_id)
     
     console.print(f"\n{style_text('Preferences Menu', 'primary')}")
-    console.print("─" * 50)
+    console.rule(style=f"bold {get_theme_colors()['primary']}")
     
     choices = [
         ("1", "Configure Categories"),

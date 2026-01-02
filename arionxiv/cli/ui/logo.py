@@ -49,7 +49,7 @@ def display_header(console: Console):
     
     header = get_header_bar(console)
     console.print(header)
-    console.print("─" * shutil.get_terminal_size().columns, style=colors['primary'])
+    console.print("─" * shutil.get_terminal_size().columns, style=f"bold {colors['primary']}")
 
 def get_simple_logo():
     """Returns a simpler version of the logo"""
@@ -103,7 +103,7 @@ def display_welcome_message(console: Console):
     panel = Panel(
         welcome_text.strip(),
         title=f"[bold {colors['primary']}]Welcome to ArionXiv[/bold {colors['primary']}]",
-        border_style=colors['primary'],
+        border_style=f"bold {colors['primary']}",
         padding=(1, 2)
     )
     

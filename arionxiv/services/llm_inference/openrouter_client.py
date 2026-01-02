@@ -74,14 +74,9 @@ class OpenRouterClient:
         },
     }
     
-    # Default model - Llama 3.3 70B is reliable and capable
     DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
     
-    # Fallback models if primary fails (in order of preference)
-    # Order based on reliability and capability
     FALLBACK_MODELS = [
-        "google/gemma-3-27b-it:free",
-        "qwen/qwen3-32b:free",
         "meta-llama/llama-3.2-3b-instruct:free",
     ]
     
