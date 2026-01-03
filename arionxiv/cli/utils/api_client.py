@@ -355,6 +355,19 @@ class ArionXivAPIClient:
         )
         return await self._handle_response(response)
     
+    async def update_chat_session(
+        self,
+        session_id: str,
+        messages: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Update chat session with new messages"""
+        response = await self.httpx_client.put(
+            f"/chat/session/{session_id}",
+            json=messages,
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
     async def send_chat_message(
         self,
         message: str,
