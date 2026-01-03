@@ -76,8 +76,14 @@ class OpenRouterClient:
     
     DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
     
+    # Verified free models from OpenRouter API (2026-01-03)
     FALLBACK_MODELS = [
+        "google/gemma-3-27b-it:free",
+        "google/gemma-3-12b-it:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "moonshotai/kimi-k2:free",
         "meta-llama/llama-3.2-3b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
     ]
     
     def __init__(
@@ -252,6 +258,8 @@ class OpenRouterClient:
         client = await self._get_http_client()
         last_error = None
         
+        logger.debug(f"Will try models in order: {models_to_try}")
+        
         for model in models_to_try:
             model_config = self.MODEL_CONFIGS.get(model, {
                 "max_tokens": 8192,
@@ -272,6 +280,7 @@ class OpenRouterClient:
                         if response_format:
                             payload["response_format"] = response_format
                         
+                        logger.debug(f"Trying {model} (attempt {attempt + 1}/{self.max_retries})")
                         response = await client.post("/chat/completions", json=payload)
                         
                         if response.status_code == 200:
@@ -289,19 +298,23 @@ class OpenRouterClient:
                             return result
                         
                         elif response.status_code == 429:
+                            last_error = f"Rate limited for model {model}"
                             wait_time = (2 ** attempt) * 2
+                            logger.debug(f"Rate limited, waiting {wait_time}s")
                             await asyncio.sleep(wait_time)
                             continue
                         
                         elif response.status_code >= 500:
+                            last_error = f"Server error {response.status_code} for model {model}"
                             wait_time = (2 ** attempt) * 1
+                            logger.debug(f"Server error, waiting {wait_time}s")
                             await asyncio.sleep(wait_time)
                             continue
                         
                         else:
                             error_detail = response.text
                             last_error = f"API error: {response.status_code} - {error_detail}"
-                            logger.warning(f"Model {model} failed: {last_error}")
+                            logger.debug(f"Model {model} failed: {last_error}")
                             break  # Try next model
                             
                 except httpx.TimeoutException:
@@ -314,14 +327,14 @@ class OpenRouterClient:
                 except Exception as e:
                     last_error = str(e)
                     if attempt == self.max_retries - 1:
-                        logger.warning(f"Model {model} exhausted retries: {last_error}")
+                        logger.debug(f"Model {model} exhausted retries: {last_error}")
                         break  # Try next model
                     
                     wait_time = (2 ** attempt) * 1
                     await asyncio.sleep(wait_time)
             
             # If we got here, this model failed - try the next one
-            logger.info(f"Trying fallback model after {model} failed")
+            logger.debug(f"Model {model} failed with: {last_error}. Trying next fallback...")
         
         # All models failed
         self.total_errors += 1

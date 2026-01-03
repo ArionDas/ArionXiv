@@ -936,7 +936,7 @@ class BasicRAG:
                 else:
                     logger.warning(f"API returned failure: {api_result}")
             except Exception as api_err:
-                logger.warning(f"Session not saved to API: {api_err}")
+                logger.debug(f"Session not saved to API: {api_err}")
             
             # Also try local database as backup (regardless of API success)
             try:
@@ -1123,30 +1123,37 @@ class BasicRAG:
             
             # Determine which LLM to use and generate response
             model_display = ""
+            success = False
+            response_text = ""
+            error_msg = ""
             
-            if self.llm_provider == "openrouter" and self.openrouter_client and self.openrouter_client.is_available:
-                # Use OpenRouter (Kimi K2, etc.)
-                result = await self.openrouter_client.chat(
-                    message=message,
-                    context=context,
-                    history=chat_history
-                )
-                
-                if result.get('success'):
-                    response_text = result['response']
-                    model_display = result.get('model_display', 'OpenRouter')
-                    success = True
-                    error_msg = ""
-                else:
-                    success = False
-                    response_text = ""
-                    error_msg = result.get('error', 'OpenRouter request failed')
+            # Use OpenRouter for chat
+            if self.openrouter_client and self.openrouter_client.is_available:
+                try:
+                    result = await self.openrouter_client.chat(
+                        message=message,
+                        context=context,
+                        history=chat_history
+                    )
+                    
+                    if result.get('success'):
+                        response_text = result['response']
+                        model_display = result.get('model_display', 'OpenRouter')
+                        success = True
+                    else:
+                        error_msg = result.get('error', 'OpenRouter request failed')
+                except Exception as openrouter_err:
+                    error_str = str(openrouter_err).lower()
+                    # Check for rate limit errors and provide user-friendly message
+                    if 'rate' in error_str or '429' in error_str or 'limit' in error_str:
+                        error_msg = "API rate limit reached. Try again later or add your own API key with: arionxiv settings api"
+                    elif 'all models' in error_str:
+                        error_msg = "API rate limit reached. Try again later or add your own API key with: arionxiv settings api"
+                    else:
+                        error_msg = f"Chat service unavailable. Try again later or add your own API key with: arionxiv settings api"
+                    logger.debug(f"OpenRouter error: {openrouter_err}")
             else:
-                # Use Groq (default)
-                chat_prompt = self._build_chat_prompt(session, message, context)
-                raw_response = await self.llm_client.get_completion(chat_prompt)
-                success, response_text, error_msg = self._parse_llm_response(raw_response)
-                model_display = os.getenv("DEFAULT_ANALYSIS_MODEL", "llama-3.3-70b").split("-")[0].title()
+                error_msg = "API key not configured. Add your API key with: arionxiv settings api"
             
             if not success:
                 return {'success': False, 'error': error_msg or 'Failed to generate response'}

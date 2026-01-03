@@ -295,6 +295,8 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
         "updated_at": {"$gte": cutoff}
     }).limit(10))
     for s in sessions:
+        # Add session_id as alias for _id for client compatibility
+        s["session_id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
     return {"success": True, "sessions": sessions}
 
