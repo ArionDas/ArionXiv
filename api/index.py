@@ -306,7 +306,12 @@ async def create_chat_session(request: ChatSessionRequest, current_user: dict = 
         db = get_db()
         title = request.title or request.paper_title or ""
         paper_title = request.paper_title or request.title or ""
+        
+        # Generate ObjectId explicitly
+        session_id = ObjectId()
+        
         session_data = {
+            "_id": session_id,
             "user_id": current_user["user_id"],
             "paper_id": request.paper_id,
             "title": title,
@@ -315,10 +320,12 @@ async def create_chat_session(request: ChatSessionRequest, current_user: dict = 
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
-        result = db.chat_sessions.insert_one(session_data)
-        return {"success": True, "session_id": str(result.inserted_id)}
+        db.chat_sessions.insert_one(session_data)
+        return {"success": True, "session_id": str(session_id)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
+        import traceback
+        error_detail = f"Failed to create session: {str(e)}. Traceback: {traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @app.put("/chat/session/{session_id}")
 async def update_chat_session(session_id: str, messages: List[dict], current_user: dict = Depends(verify_token)):
