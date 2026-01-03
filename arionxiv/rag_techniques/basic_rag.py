@@ -934,6 +934,8 @@ class BasicRAG:
                 if api_result.get("success"):
                     # Update in-memory session with API session_id for consistency
                     api_session_id = api_result.get('session_id')
+                    # Store the API session ID for later updates
+                    self._in_memory_sessions[session_id]['api_session_id'] = api_session_id
                     logger.info(f"Chat session saved to cloud: {api_session_id}")
                     session_saved = True
                 else:
@@ -1173,7 +1175,29 @@ class BasicRAG:
                 ])
                 self._in_memory_sessions[session_id]['last_activity'] = datetime.utcnow()
             
-            # Try to persist to database (may fail)
+            # Try to persist to Vercel API (cloud storage)
+            try:
+                from ..cli.utils.api_client import api_client
+                # Get full message history from in-memory session
+                if session_id in self._in_memory_sessions:
+                    # Use the API session ID (from MongoDB) for updates
+                    api_session_id = self._in_memory_sessions[session_id].get('api_session_id')
+                    if api_session_id:
+                        all_messages = self._in_memory_sessions[session_id].get('messages', [])
+                        # Convert datetime objects to ISO strings for JSON serialization
+                        serializable_messages = []
+                        for msg in all_messages:
+                            serializable_messages.append({
+                                'type': msg.get('type'),
+                                'content': msg.get('content'),
+                                'timestamp': msg.get('timestamp').isoformat() if hasattr(msg.get('timestamp'), 'isoformat') else str(msg.get('timestamp'))
+                            })
+                        await api_client.update_chat_session(api_session_id, serializable_messages)
+                        logger.debug(f"Messages saved to API for session {api_session_id}")
+            except Exception as api_err:
+                logger.debug(f"Failed to save messages to API: {api_err}")
+            
+            # Try to persist to local database (may fail)
             try:
                 await self.db_service.update_one(
                     self.chat_collection,
