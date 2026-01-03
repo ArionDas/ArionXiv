@@ -123,6 +123,35 @@ async def root():
 async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
+@app.get("/debug/db-test")
+async def debug_db_test():
+    """Test MongoDB connection - remove after debugging"""
+    try:
+        db = get_db()
+        # Try to insert a test document
+        test_id = ObjectId()
+        test_doc = {
+            "_id": test_id,
+            "test": True,
+            "created_at": datetime.utcnow()
+        }
+        result = db.debug_test.insert_one(test_doc)
+        # Delete it immediately
+        db.debug_test.delete_one({"_id": test_id})
+        return {
+            "success": True,
+            "message": "MongoDB connection works",
+            "inserted_id": str(test_id),
+            "database": db.name
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 # Auth endpoints
 @app.post("/auth/register")
 async def register(request: RegisterRequest):
