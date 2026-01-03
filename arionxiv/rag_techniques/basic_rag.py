@@ -924,6 +924,7 @@ class BasicRAG:
             
             # Try to persist to Vercel API first (cloud storage)
             session_saved = False
+            api_error = None
             try:
                 from ..cli.utils.api_client import api_client
                 api_result = await api_client.create_chat_session(
@@ -931,12 +932,16 @@ class BasicRAG:
                     title=paper.get('title', paper_id)
                 )
                 if api_result.get("success"):
-                    logger.info(f"Chat session saved to cloud: {api_result.get('session_id')}")
+                    # Update in-memory session with API session_id for consistency
+                    api_session_id = api_result.get('session_id')
+                    logger.info(f"Chat session saved to cloud: {api_session_id}")
                     session_saved = True
                 else:
-                    logger.warning(f"API returned failure: {api_result}")
+                    api_error = f"API failure: {api_result}"
+                    logger.warning(api_error)
             except Exception as api_err:
-                logger.debug(f"Session not saved to API: {api_err}")
+                api_error = f"API error: {api_err}"
+                logger.warning(f"Session not saved to API: {api_err}")
             
             # Also try local database as backup (regardless of API success)
             try:
@@ -948,6 +953,8 @@ class BasicRAG:
             
             if not session_saved:
                 logger.warning(f"Chat session only stored in-memory: {session_id}")
+                if api_error:
+                    logger.warning(f"API save failed: {api_error}")
             
             self.console.print(Panel(
                 f"[bold {colors['primary']}]Chat Session Started[/bold {colors['primary']}]\n"

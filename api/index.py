@@ -341,6 +341,7 @@ async def create_chat_session(request: ChatSessionRequest, current_user: dict = 
         
         session_data = {
             "_id": session_id,
+            "session_id": str(session_id),  # Add session_id field (MongoDB has unique index on this)
             "user_id": current_user["user_id"],
             "paper_id": request.paper_id,
             "title": title,
