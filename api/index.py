@@ -302,20 +302,23 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
 
 @app.post("/chat/session")
 async def create_chat_session(request: ChatSessionRequest, current_user: dict = Depends(verify_token)):
-    db = get_db()
-    title = request.title or request.paper_title or ""
-    paper_title = request.paper_title or request.title or ""
-    session_data = {
-        "user_id": current_user["user_id"],
-        "paper_id": request.paper_id,
-        "title": title,
-        "paper_title": paper_title,
-        "messages": [],
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-    result = db.chat_sessions.insert_one(session_data)
-    return {"success": True, "session_id": str(result.inserted_id)}
+    try:
+        db = get_db()
+        title = request.title or request.paper_title or ""
+        paper_title = request.paper_title or request.title or ""
+        session_data = {
+            "user_id": current_user["user_id"],
+            "paper_id": request.paper_id,
+            "title": title,
+            "paper_title": paper_title,
+            "messages": [],
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        result = db.chat_sessions.insert_one(session_data)
+        return {"success": True, "session_id": str(result.inserted_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
 
 @app.put("/chat/session/{session_id}")
 async def update_chat_session(session_id: str, messages: List[dict], current_user: dict = Depends(verify_token)):
