@@ -1049,7 +1049,7 @@ class BasicRAG:
                 break
             
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=self.console) as progress:
-                task = progress.add_task(f"[{colors['primary']}]Thinking...", total=None)
+                task = progress.add_task(f"[bold {colors['primary']}]Thinking...", total=None)
                 result = await self._chat_with_session(session_id, message)
             
             if result['success']:
@@ -1059,7 +1059,7 @@ class BasicRAG:
                     result['response'],
                     panel_title=f"[bold {colors['primary']}]ArionXiv Assistant[/bold {colors['primary']}]",
                     border_style=colors['primary'],
-                    duration=2.0
+                    duration=1.0
                 )
                 
                 # Build info line with chunks and model name

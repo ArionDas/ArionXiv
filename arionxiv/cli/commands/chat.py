@@ -347,7 +347,7 @@ async def _display_sessions_table_animated(console: Console, colors: Dict, sessi
             if len(title) > 45:
                 title = title[:42] + "..."
             
-            last_activity = session.get("last_activity")
+            last_activity = session.get("last_activity") or session.get("updated_at")
             if last_activity:
                 if isinstance(last_activity, datetime):
                     time_diff = datetime.utcnow() - last_activity
@@ -355,10 +355,21 @@ async def _display_sessions_table_animated(console: Console, colors: Dict, sessi
                         time_str = f"{int(time_diff.total_seconds() / 60)} min ago"
                     else:
                         time_str = f"{int(time_diff.total_seconds() / 3600)} hrs ago"
+                elif isinstance(last_activity, str):
+                    # Parse ISO datetime string
+                    try:
+                        dt = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+                        time_diff = datetime.utcnow() - dt.replace(tzinfo=None)
+                        if time_diff.total_seconds() < 3600:
+                            time_str = f"{int(time_diff.total_seconds() / 60)} min ago"
+                        else:
+                            time_str = f"{int(time_diff.total_seconds() / 3600)} hrs ago"
+                    except:
+                        time_str = str(last_activity)[:16]
                 else:
                     time_str = str(last_activity)[:16]
             else:
-                time_str = "Unknown"
+                time_str = "Recent"
             
             msg_count = session.get("message_count", len(session.get("messages", [])))
             exchanges = msg_count // 2
