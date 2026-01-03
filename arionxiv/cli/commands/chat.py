@@ -326,6 +326,9 @@ async def _select_and_continue_session(console: Console, colors: Dict, user_name
     selected_session = sessions[idx]
     await _continue_chat_session(console, colors, user_name, selected_session)
     
+    # Show "What's Next?" after resumed chat ends
+    show_command_suggestions(console, context='chat')
+    
     return "SESSION_CONTINUED"
 
 
@@ -388,41 +391,59 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
     
     left_to_right_reveal(console, f"\nResuming chat with: {paper_title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    # Fetch paper data - try local cache first
-    paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
+    # Check for cached embeddings first - if available, skip PDF download
+    from ...services.unified_database_service import unified_database_service
+    cached_embeddings = await unified_database_service.get_cached_embeddings(paper_id)
     
-    if not paper_metadata:
-        left_to_right_reveal(console, f"Could not retrieve paper {paper_id}.", style=f"bold {colors['error']}", duration=0.5)
-        return
-    
-    # Download and extract text
-    pdf_url = paper_metadata.get('pdf_url')
-    if not pdf_url:
-        left_to_right_reveal(console, "No PDF URL available for this paper.", style=f"bold {colors['error']}", duration=0.5)
-        return
-    
-    left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
-    pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, paper_id, pdf_url)
-    
-    if not pdf_path:
-        left_to_right_reveal(console, "Failed to download PDF.", style=f"bold {colors['error']}", duration=0.5)
-        return
-    
-    left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
-    from ...services.unified_pdf_service import pdf_processor
-    text_content = await pdf_processor.extract_text(pdf_path)
-    
-    if not text_content:
-        left_to_right_reveal(console, "Failed to extract text from PDF.", style=f"bold {colors['error']}", duration=0.5)
-        return
-    
-    paper_info = {
-        'arxiv_id': paper_id,
-        'title': paper_metadata.get('title', paper_title),
-        'authors': paper_metadata.get('authors', []),
-        'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
-        'full_text': text_content
-    }
+    if cached_embeddings:
+        # Use cached embeddings - no need to download PDF or extract text
+        left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_embeddings)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
+        
+        # Fetch minimal paper metadata for the chat
+        paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
+        paper_info = {
+            'arxiv_id': paper_id,
+            'title': paper_metadata.get('title', paper_title) if paper_metadata else paper_title,
+            'authors': paper_metadata.get('authors', []) if paper_metadata else [],
+            'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')) if paper_metadata else '',
+            'full_text': '',  # Not needed when using cached embeddings
+            '_cached_embeddings': cached_embeddings  # Pass cached embeddings
+        }
+    else:
+        # No cached embeddings - need to download PDF and extract text
+        paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
+        
+        if not paper_metadata:
+            left_to_right_reveal(console, f"Could not retrieve paper {paper_id}.", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        pdf_url = paper_metadata.get('pdf_url')
+        if not pdf_url:
+            left_to_right_reveal(console, "No PDF URL available for this paper.", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        left_to_right_reveal(console, "Downloading PDF...", style=f"bold {colors['primary']}", duration=0.5)
+        pdf_path = await asyncio.to_thread(arxiv_fetcher.fetch_paper_sync, paper_id, pdf_url)
+        
+        if not pdf_path:
+            left_to_right_reveal(console, "Failed to download PDF.", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        left_to_right_reveal(console, "Extracting text...", style=f"bold {colors['primary']}", duration=0.5)
+        from ...services.unified_pdf_service import pdf_processor
+        text_content = await pdf_processor.extract_text(pdf_path)
+        
+        if not text_content:
+            left_to_right_reveal(console, "Failed to extract text from PDF.", style=f"bold {colors['error']}", duration=0.5)
+            return
+        
+        paper_info = {
+            'arxiv_id': paper_id,
+            'title': paper_metadata.get('title', paper_title),
+            'authors': paper_metadata.get('authors', []),
+            'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
+            'full_text': text_content
+        }
     
     await rag_chat_system.continue_chat_session(session, paper_info)
 

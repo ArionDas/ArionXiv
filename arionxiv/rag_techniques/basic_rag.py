@@ -999,16 +999,23 @@ class BasicRAG:
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
-            # Re-index the paper content
-            paper_text = self._extract_paper_text(paper_info)
-            if paper_text:
-                paper_id = paper_info.get('arxiv_id') or paper_info.get('id')
-                await self.add_document_to_index_with_progress(
-                    paper_id,
-                    paper_text,
-                    {'type': 'paper', 'title': paper_title},
-                    console=self.console
-                )
+            # Check if cached embeddings were passed
+            cached_embeddings = paper_info.get('_cached_embeddings')
+            if cached_embeddings:
+                # Use pre-loaded cached embeddings directly
+                self._session_embeddings = cached_embeddings
+                logger.info(f"Loaded {len(cached_embeddings)} cached embeddings for session")
+            else:
+                # Re-index the paper content
+                paper_text = self._extract_paper_text(paper_info)
+                if paper_text:
+                    paper_id = paper_info.get('arxiv_id') or paper_info.get('id')
+                    await self.add_document_to_index_with_progress(
+                        paper_id,
+                        paper_text,
+                        {'type': 'paper', 'title': paper_title},
+                        console=self.console
+                    )
             
             self._current_session_id = session_id
             
@@ -1029,12 +1036,20 @@ class BasicRAG:
             
             # Show a summary of recent conversation if there are messages
             if messages:
-                recent = messages[-8:] if len(messages) > 8 else messages
-                left_to_right_reveal(self.console, "\nRecent conversation:", style=f"bold {colors['primary']}", duration=0.8)
+                # Show last 8 Q&A pairs (16 messages total)
+                num_pairs = min(8, len(messages) // 2)
+                if num_pairs > 0:
+                    recent = messages[-(num_pairs * 2):]
+                else:
+                    recent = messages  # Show whatever we have
+                
+                left_to_right_reveal(self.console, f"\nRecent conversation ({num_pairs} Q&A):", style=f"bold {colors['primary']}", duration=0.8)
                 for msg in recent:
-                    role = "You" if msg['type'] == 'user' else "Assistant"
-                    content = msg['content'][:200] + "..." if len(msg['content']) > 200 else msg['content']
-                    self.console.print(f"[dim {colors['primary']}]{role}: {content}[/dim {colors['primary']}]")
+                    role = "You" if msg.get('type') == 'user' else "Assistant"
+                    content = msg.get('content', '')
+                    # Truncate long messages for display
+                    display_content = content[:150] + "..." if len(content) > 150 else content
+                    self.console.print(f"[dim {colors['primary']}]{role}: {display_content}[/dim {colors['primary']}]")
             
             try:
                 await self._run_chat_loop(session_id)
