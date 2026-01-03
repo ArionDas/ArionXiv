@@ -303,11 +303,13 @@ async def get_chat_sessions(current_user: dict = Depends(verify_token)):
 @app.post("/chat/session")
 async def create_chat_session(request: ChatSessionRequest, current_user: dict = Depends(verify_token)):
     db = get_db()
+    title = request.title or request.paper_title or ""
+    paper_title = request.paper_title or request.title or ""
     session_data = {
         "user_id": current_user["user_id"],
         "paper_id": request.paper_id,
-        "title": request.title or request.paper_title,
-        "paper_title": request.paper_title or request.title,
+        "title": title,
+        "paper_title": paper_title,
         "messages": [],
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()

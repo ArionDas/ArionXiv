@@ -644,7 +644,7 @@ class BasicRAG:
             
             if cached_embeddings:
                 # Load from cache - much faster!
-                left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_embeddings)} chunks)...", style=f"{colors['primary']}", duration=0.8)
+                left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_embeddings)} chunks)...", style=f"bold {colors['primary']}", duration=0.8)
                 await self._load_embeddings_from_cache(cached_embeddings)
                 
                 # Note: We intentionally do NOT pre-load the embedding model here.
