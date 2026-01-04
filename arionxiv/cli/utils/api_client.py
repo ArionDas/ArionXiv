@@ -95,16 +95,15 @@ class ArionXivAPIClient:
             data = {"message": response.text}
         
         if response.status_code >= 400:
-            error_msg = data.get("detail", {})
+            # Extract error message from various possible formats
+            error_msg = data.get("detail", data.get("error", data.get("message", "")))
             if isinstance(error_msg, dict):
-                error_msg = error_msg.get("message", str(error_msg))
-            elif isinstance(error_msg, str):
-                pass
-            else:
-                error_msg = str(data)
+                error_msg = error_msg.get("message", "") or str(error_msg) if error_msg else ""
+            if not error_msg or error_msg == "{}":
+                error_msg = f"API error {response.status_code}"
             
             raise APIClientError(
-                message=error_msg,
+                message=str(error_msg),
                 status_code=response.status_code,
                 details=data
             )

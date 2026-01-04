@@ -462,7 +462,7 @@ class UnifiedDatabaseService:
             List[Dict[str, Any]]: List of found documents
         """
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return []
             
         try:
@@ -486,7 +486,7 @@ class UnifiedDatabaseService:
             int: Number of documents deleted
         """
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return 0
             
         try:
@@ -508,7 +508,7 @@ class UnifiedDatabaseService:
             List[Any]: List of inserted document IDs
         """
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return []
             
         if not documents:
@@ -537,7 +537,7 @@ class UnifiedDatabaseService:
         """
 
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return {"success": False, "message": "Database not connected"}
             
         try:

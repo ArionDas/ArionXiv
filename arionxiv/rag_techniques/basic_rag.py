@@ -1183,7 +1183,13 @@ class BasicRAG:
                     else:
                         error_msg = result.get('error', 'Hosted API failed')
                 except Exception as e:
-                    error_msg = f"Chat unavailable: {str(e)}"
+                    # Extract meaningful error message from APIClientError
+                    if hasattr(e, 'message') and e.message:
+                        error_msg = f"Chat unavailable: {e.message}"
+                    elif hasattr(e, 'status_code') and e.status_code:
+                        error_msg = f"Chat unavailable: API error {e.status_code}"
+                    else:
+                        error_msg = f"Chat unavailable: {str(e) or 'Unknown error'}"
                     logger.debug(f"Hosted API error: {e}")
             
             if not success:
