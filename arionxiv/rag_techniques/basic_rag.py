@@ -310,7 +310,7 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
             ) as progress:
                 loading_msg = "Loading model from cache..." if is_cached else "Downloading and initializing embedding model..."
                 task = progress.add_task(
-                    f"[{colors['primary']}]{loading_msg}[/{colors['primary']}]", 
+                    f"[bold {colors['primary']}]{loading_msg}[/bold {colors['primary']}]", 
                     total=None
                 )
                 loaded_model = SentenceTransformer(self.model_name, trust_remote_code=True)
