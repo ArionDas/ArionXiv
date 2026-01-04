@@ -75,9 +75,9 @@ class UnifiedDatabaseService:
         try:
             # Check if MongoDB URI is configured
             if not self.db_url:
-                logger.error("MongoDB connection string not found. Set MONGODB_URI environment variable.")
-                logger.info("To configure: set MONGODB_URI=mongodb+srv://... in your environment or .env file")
-                raise ValueError("MongoDB connection string not found. Set MONGODB_URI or MONGODB_URL environment variable.")
+                # Silent debug - end users use hosted Vercel API, local MongoDB is optional
+                logger.debug("No local MongoDB URI configured - this is normal for end users")
+                raise ValueError("Local MongoDB not configured")
             
             logger.info("Attempting to connect to MongoDB Atlas...")
             
@@ -112,7 +112,7 @@ class UnifiedDatabaseService:
             logger.info("Database indexes created/verified")
             
         except asyncio.TimeoutError:
-            logger.error("MongoDB connection timeout - check your internet connection")
+            logger.debug("MongoDB connection timeout")
             if IP_HELPER_AVAILABLE:
                 check_mongodb_connection_error("connection timeout")
             raise Exception("MongoDB connection timeout")
@@ -124,16 +124,10 @@ class UnifiedDatabaseService:
                 check_mongodb_connection_error(error_msg)
             
             if "SSL handshake failed" in error_msg and "TLSV1_ALERT_INTERNAL_ERROR" in error_msg:
-                logger.error("MongoDB Atlas SSL handshake failed")
-                logger.error("This typically indicates:")
-                logger.error("   1. Invalid credentials (username/password)")
-                logger.error("   2. MongoDB Atlas cluster is paused or deleted")
-                logger.error("   3. IP address not whitelisted in Atlas Network Access")
-                logger.error("   4. Cluster URL has changed")
-                logger.error("Please check your MongoDB Atlas console")
-                raise Exception("MongoDB Atlas authentication/access failed - check credentials and cluster status")
+                logger.debug("MongoDB Atlas SSL handshake failed - check credentials")
+                raise Exception("Local MongoDB connection failed")
             else:
-                logger.error(f"MongoDB connection failed: {str(e)}")
+                logger.debug(f"MongoDB connection issue: {str(e)}")
                 raise Exception(f"Failed to connect to MongoDB: {str(e)}")
     
     def _enable_offline_mode(self):
@@ -289,8 +283,8 @@ class UnifiedDatabaseService:
             logger.info(" MongoDB connection successful - running in ONLINE mode")
             self._offline_mode = False
         except Exception as e:
-            logger.warning(f"MongoDB connection failed: {str(e)}")
-            logger.warning(" Falling back to offline mode with in-memory storage")
+            # Silent - end users use hosted API, local DB is optional
+            logger.debug(f"Local MongoDB not available: {str(e)}")
             self._offline_mode = True
             self.offline_papers = {}
             self.offline_users = {}

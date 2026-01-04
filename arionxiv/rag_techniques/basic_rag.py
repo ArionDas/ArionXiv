@@ -20,6 +20,10 @@ except ImportError:
     np = None
     SentenceTransformer = None
 
+import warnings
+# Suppress FutureWarning from deprecated google.generativeai package
+warnings.filterwarnings("ignore", message=".*google.generativeai.*", category=FutureWarning)
+
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
