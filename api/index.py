@@ -9,9 +9,13 @@ import secrets
 import hmac
 import re
 import jwt
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from functools import wraps
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
