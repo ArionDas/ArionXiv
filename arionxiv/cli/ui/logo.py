@@ -18,7 +18,7 @@ def get_ascii_logo():
     ║    ██║  ██║██║  ██║██║╚██████╔╝██║ ╚████║██╔╝ ██╗██║ ╚████╔╝  ║
     ║    ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═══╝   ║
     ║                                                               ║
-    ║          AI-Powered Research Paper Analysis Platform          ║
+    ║          Don't read papers manually anymore!                  ║
     ║                                                               ║
     ╚═══════════════════════════════════════════════════════════════╝
     """
@@ -58,7 +58,7 @@ def get_simple_logo():
     ║                                          ║
     ║           A R I O N   X I V              ║
     ║                                          ║
-    ║      AI Research Paper Analysis          ║
+    ║      Avoid reading papers manually!      ║
     ║                                          ║
     ╚══════════════════════════════════════════╝
     """

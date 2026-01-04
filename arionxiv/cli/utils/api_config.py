@@ -61,7 +61,7 @@ API_KEY_INSTRUCTIONS = {
             "5. Copy your API key",
             "",
             "Note: Groq is FREE and incredibly fast!",
-            "      It's REQUIRED for AI analysis and chat features."
+            "      Optional - use for local LLM inference."
         ]
     }
 }
@@ -94,9 +94,9 @@ class APIConfigManager:
         "groq": {
             "name": "Groq",
             "env_var": "GROQ_API_KEY",
-            "description": "Used for LLM-powered analysis and chat (FREE tier available)",
+            "description": "Optional - for local LLM inference (hosted API is used by default)",
             "url": "https://console.groq.com/keys",
-            "required": True
+            "required": False
         }
     }
     
@@ -277,25 +277,24 @@ def run_first_time_api_setup(console_instance: Console = None) -> bool:
     console_instance.print()
     console_instance.print(Panel(
         "[bold]Welcome to ArionXiv![/bold]\n\n"
-        "ArionXiv uses AI services for paper analysis and chat.\n"
-        "All API keys are [bold]FREE[/bold] to obtain!\n\n"
-        "[bold]Quick Overview:[/bold]\n"
-        "  - Groq API Key - [bold]REQUIRED[/bold] for AI features (free & fast!)\n"
-        "  - Gemini API Key - Optional, for enhanced embeddings\n"
-        "  - HuggingFace Token - Optional, for model downloads\n\n"
-        "[white]Your keys are stored securely in ~/.arionxiv/api_keys.json[/white]\n"
-        "[white]They persist across sessions - configure once, use forever![/white]",
-        title="[bold]First-Time API Setup[/bold]",
+        "ArionXiv is ready to use. All AI features work out of the box\n"
+        "using the hosted backend.\n\n"
+        "[bold]Optional:[/bold] Configure your own API keys for:\n"
+        "  - Gemini - Enhanced embeddings\n"
+        "  - Groq - Faster local LLM inference\n"
+        "  - HuggingFace - Model downloads\n\n"
+        "[dim]You can configure these anytime with: arionxiv settings api[/dim]",
+        title="[bold]First-Time Setup[/bold]",
         border_style=f"bold {colors['primary']}"
     ))
     
-    # Ask if user wants to configure now
+    # Ask if user wants to configure now - default is No
     if not Confirm.ask(
-        f"\n[{colors['primary']}]Would you like to configure API keys now?[/{colors['primary']}]",
-        default=True
+        f"\n[bold {colors['primary']}]Would you like to configure optional API keys now?[/bold {colors['primary']}]",
+        default=False
     ):
-        left_to_right_reveal(console_instance, f"\nSkipping API setup.", style=colors['warning'], duration=1.0)
-        left_to_right_reveal(console_instance, f"You can configure keys later with: arionxiv settings api", style=colors['primary'], duration=1.0)
+        left_to_right_reveal(console_instance, f"\nGreat! You're all set.", style=colors['primary'], duration=1.0)
+        left_to_right_reveal(console_instance, f"Configure keys later with: arionxiv settings api", style=f"dim {colors['primary']}", duration=1.0)
         api_config_manager.mark_setup_completed()
         return False
     
@@ -337,7 +336,7 @@ def _configure_single_provider_with_instructions(
     left_to_right_reveal(console_instance, f"{info['description']}", style="white", duration=0.6)
     
     if current_key:
-        left_to_right_reveal(console_instance, f"Already configured: {api_config_manager._mask_key(current_key)}", style=colors['primary'], duration=0.8)
+        left_to_right_reveal(console_instance, f"Already configured: {api_config_manager._mask_key(current_key)}", style=f"bold {colors['primary']}", duration=0.8)
         if first_time:
             # Already configured, skip
             return True
@@ -352,17 +351,17 @@ def _configure_single_provider_with_instructions(
         prompt_text += " (or press Enter to skip)"
     
     key_input = Prompt.ask(
-        f"\n[{colors['primary']}]{prompt_text}[/{colors['primary']}]",
+        f"\n[bold {colors['primary']}]{prompt_text}[/bold {colors['primary']}]",
         default="",
         show_default=False
     )
     
     if key_input.strip():
         if api_config_manager.set_api_key(provider, key_input.strip()):
-            left_to_right_reveal(console_instance, f"{info['name']} key saved successfully!", style=colors['primary'], duration=1.0)
+            left_to_right_reveal(console_instance, f"{info['name']} key saved successfully!", style=f"bold {colors['primary']}", duration=1.0)
             return True
         else:
-            left_to_right_reveal(console_instance, f"Failed to save {info['name']} key", style=colors['error'], duration=1.0)
+            left_to_right_reveal(console_instance, f"Failed to save {info['name']} key", style=f"bold {colors['error']}", duration=1.0)
             return False
     else:
         if info["required"]:
@@ -390,7 +389,7 @@ def _configure_single_provider(
     left_to_right_reveal(console_instance, f"Get your key at: {info['url']}", style="white", duration=0.6)
     
     if current_key:
-        left_to_right_reveal(console_instance, f"Current: {api_config_manager._mask_key(current_key)}", style=colors['primary'], duration=0.8)
+        left_to_right_reveal(console_instance, f"Current: {api_config_manager._mask_key(current_key)}", style=f"bold {colors['primary']}", duration=0.8)
         if first_time:
             # Already configured, skip
             return True
@@ -401,21 +400,21 @@ def _configure_single_provider(
         prompt_text += " (or press Enter to skip)"
     
     key_input = Prompt.ask(
-        f"[{colors['primary']}]{prompt_text}[/{colors['primary']}]",
+        f"[bold {colors['primary']}]{prompt_text}[/bold {colors['primary']}]",
         default="",
         show_default=False
     )
     
     if key_input.strip():
         if api_config_manager.set_api_key(provider, key_input.strip()):
-            left_to_right_reveal(console_instance, f"{info['name']} key saved successfully", style=colors['primary'], duration=1.0)
+            left_to_right_reveal(console_instance, f"{info['name']} key saved successfully", style=f"bold {colors['primary']}", duration=1.0)
             return True
         else:
-            left_to_right_reveal(console_instance, f"Failed to save {info['name']} key", style=colors['error'], duration=1.0)
+            left_to_right_reveal(console_instance, f"Failed to save {info['name']} key", style=f"bold {colors['error']}", duration=1.0)
             return False
     else:
         if info["required"]:
-            left_to_right_reveal(console_instance, f"Warning: {info['name']} key is required for AI features", style=colors['warning'], duration=1.0)
+            left_to_right_reveal(console_instance, f"Warning: {info['name']} key is required for AI features", style=f"bold {colors['warning']}", duration=1.0)
         else:
             left_to_right_reveal(console_instance, f"Skipped {info['name']}", style="white", duration=0.8)
         return True
@@ -444,7 +443,7 @@ def show_api_status(console_instance: Console = None):
     table.add_column("Required", style="white", width=10)
     
     for provider, info in status.items():
-        status_text = f"[{colors['primary']}]Configured[/{colors['primary']}]" if info["configured"] else f"[{colors['warning']}]Not Set[/{colors['warning']}]"
+        status_text = f"[bold {colors['primary']}]Configured[/bold {colors['primary']}]" if info["configured"] else f"[bold {colors['warning']}]Not Set[/bold {colors['warning']}]"
         source_text = info["source"].title() if info["configured"] else "-"
         key_text = info["masked_key"] if info["masked_key"] else "-"
         required_text = "Yes" if info["required"] else "No"

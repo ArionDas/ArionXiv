@@ -14,8 +14,6 @@ sys.path.insert(0, str(backend_path))
 
 from ..ui.global_theme_manager import global_theme_manager
 from ...services.unified_user_service import unified_user_service
-from ...services.unified_database_service import unified_database_service
-from ...services.unified_auth_service import auth_service
 
 console = Console()
 
@@ -54,52 +52,10 @@ class DatabaseConfigManager:
             return self.get_default_config()
     
     async def _load_from_database(self, quiet: bool = True) -> Dict[str, Any]:
-        """Load configuration from database for authenticated user"""
-        try:
-            # Ensure database connection
-            if unified_database_service.db is None:
-                await unified_database_service.connect_mongodb()
-            
-            user = unified_user_service.get_current_user()
-            if not user:
-                return self._load_local_config()
-            
-            # Get settings from database
-            result = await auth_service.get_user_settings(user["id"])
-            
-            if result.get("success"):
-                settings = result.get("settings", {})
-                
-                # Convert database format to local config format
-                self.config = {
-                    "user": {
-                        "id": user["id"],
-                        "user_name": user["user_name"],
-                        "email": user["email"],
-                        "full_name": user["full_name"],
-                        "preferences": settings.get("preferences", {})
-                    },
-                    "display": {
-                        "theme_color": settings.get("theme_color", "blue"),
-                        **settings.get("display", {})
-                    },
-                    "paths": {
-                        "downloads": str(self.config_dir / "downloads"),
-                        "data": str(self.config_dir / "data"),
-                        "cache": str(self.config_dir / "data" / "cache")
-                    },
-                    "first_time_user": False,
-                    "database_mode": True
-                }
-                
-                return self.config
-            else:
-                # Fallback to local config if database fails
-                return self._load_local_config()
-                
-        except Exception:
-            # Silently fall back to local config
-            return self._load_local_config(quiet=quiet)
+        """Load configuration - uses local config (hosted API handles cloud data)"""
+        # With hosted Vercel API, we don't need local MongoDB
+        # Settings are synced via API, local config is used for CLI preferences
+        return self._load_local_config(quiet=quiet)
     
     def _load_local_config(self, quiet: bool = True) -> Dict[str, Any]:
         """Load configuration from local file"""
@@ -142,40 +98,9 @@ class DatabaseConfigManager:
             return False
     
     async def _save_to_database(self) -> bool:
-        """Save configuration to database for authenticated user"""
-        try:
-            # Always save to local config as well for offline/new-process access
-            self._save_local_config()
-            
-            # Ensure database connection
-            if unified_database_service.db is None:
-                await unified_database_service.connect_mongodb()
-            
-            user = unified_user_service.get_current_user()
-            if not user:
-                return True  # Local already saved
-            
-            # Convert local config format to database format
-            settings_update = {
-                "theme_color": self.config.get("display", {}).get("theme_color", "blue"),
-                "preferences": self.config.get("user", {}).get("preferences", {}),
-                "display": {k: v for k, v in self.config.get("display", {}).items() if k != "theme_color"}
-            }
-            
-            # Save to database
-            result = await auth_service.update_user_settings(user["id"], settings_update)
-            
-            if result.get("success"):
-                return True
-            else:
-                error_msg = result.get('error') or result.get('message') or 'Unknown error'
-                console.print(f"[yellow]Database sync failed: {error_msg}[/yellow]")
-                return True  # Local already saved, so return True
-                
-        except Exception as e:
-            # Local config was already saved at the beginning of the method
-            console.print(f"[yellow]Database sync failed: {e}[/yellow]")
-            return True
+        """Save configuration locally (hosted API handles cloud sync separately)"""
+        # With hosted Vercel API, we save locally and API syncs settings
+        return self._save_local_config()
     
     def get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
@@ -302,44 +227,7 @@ class DatabaseConfigManager:
     
     async def reset_config(self) -> bool:
         """Reset configuration to defaults"""
-        if unified_user_service.is_authenticated():
-            # Reset database settings
-            try:
-                # Ensure database connection
-                if unified_database_service.db is None:
-                    await unified_database_service.connect_mongodb()
-                    
-                user = unified_user_service.get_current_user()
-                if user:
-                    default_settings = {
-                        "theme_color": "blue",
-                        "preferences": {
-                            "categories": ["cs.AI", "cs.LG", "cs.CL"],
-                            "keywords": [],
-                            "max_daily_papers": 10,
-                            "analysis_depth": "standard",
-                            "auto_download": False,
-                            "email_notifications": False
-                        },
-                        "display": {
-                            "theme": "auto",
-                            "table_style": "grid",
-                            "show_abstracts": True,
-                            "max_abstract_length": 200,
-                            "papers_per_page": 10
-                        }
-                    }
-                    
-                    result = await auth_service.update_user_settings(user["id"], default_settings)
-                    if result.get("success"):
-                        self.config = self.get_default_config()
-                        self.config["database_mode"] = True
-                        self.config["user"].update(user)
-                        return True
-            except Exception as e:
-                console.print(f"[yellow]Database reset failed ({e}), resetting locally[/yellow]")
-        
-        # Reset local config
+        # Reset local config (hosted API handles cloud settings separately)
         self.config = self.get_default_config()
         return self._save_local_config()
 

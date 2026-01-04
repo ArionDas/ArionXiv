@@ -22,10 +22,10 @@ class UnifiedConfigService:
     """
     
     def __init__(self, debug_mode: bool = False, quiet: bool = False):
-        # Configuration constants - MongoDB URI must be set via environment variable
+        # Configuration constants - MongoDB URI for local development only
+        # End users use the hosted Vercel API, so this is not required
         self.MONGODB_URI = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL")
-        if not self.MONGODB_URI:
-            logging.getLogger(__name__).warning("MONGODB_URI not set - database features will be unavailable")
+        # Silent - end users don't need local MongoDB
         self.DATABASE_NAME = os.getenv("DATABASE_NAME", "arionxiv")
         
         # MongoDB Connection Settings

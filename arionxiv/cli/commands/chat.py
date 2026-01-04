@@ -16,7 +16,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ..utils.api_client import api_client, APIClientError
 from ...services.unified_user_service import unified_user_service
-from ...services.unified_database_service import unified_database_service
 from ...services.unified_analysis_service import rag_chat_system
 from ...arxiv_operations.client import arxiv_client
 from ...arxiv_operations.fetcher import arxiv_fetcher
@@ -42,11 +41,7 @@ async def run_chat_command(paper_id: Optional[str] = None):
     console = create_themed_console()
     colors = get_theme_colors()
     
-    # Initialize database connection for RAG session management
-    try:
-        await unified_database_service.connect_mongodb()
-    except Exception as e:
-        logger.warning(f"Database connection failed: {e}. Chat sessions will be stored in memory only.")
+    # Note: RAG embeddings are cached locally, chat sessions stored via hosted API
     
     console.print(Panel(
         f"[bold {colors['primary']}]ArionXiv Chat System[/bold {colors['primary']}]\n"
@@ -392,8 +387,14 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
     left_to_right_reveal(console, f"\nResuming chat with: {paper_title}", style=f"bold {colors['primary']}", duration=0.5)
     
     # Check for cached embeddings first - if available, skip PDF download
-    from ...services.unified_database_service import unified_database_service
-    cached_embeddings = await unified_database_service.get_cached_embeddings(paper_id)
+    cached_embeddings = None
+    try:
+        from ...services.unified_database_service import unified_database_service
+        if unified_database_service.db is not None:
+            cached_embeddings = await unified_database_service.get_cached_embeddings(paper_id)
+    except Exception:
+        # No local MongoDB or method not available - embeddings will be regenerated
+        cached_embeddings = None
     
     if cached_embeddings:
         # Use cached embeddings - no need to download PDF or extract text
@@ -477,19 +478,20 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
     
     left_to_right_reveal(console, f"\nSelected: {title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    # Check for cached embeddings in DB first
-    from ...services.unified_database_service import unified_database_service
+    # Check for cached embeddings in DB first (optional - local MongoDB not required)
     cached_embeddings = None
     try:
-        vector_collection = "paper_embeddings"
-        cached = await unified_database_service.find_many(
-            vector_collection,
-            {'doc_id': arxiv_id, 'expires_at': {'$gt': __import__('datetime').datetime.utcnow()}},
-            limit=10000
-        )
-        if cached and len(cached) > 0:
-            cached_embeddings = cached
-            left_to_right_reveal(console, f"Loading cached embeddings ({len(cached)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
+        from ...services.unified_database_service import unified_database_service
+        if unified_database_service.db is not None:
+            vector_collection = "paper_embeddings"
+            cached = await unified_database_service.find_many(
+                vector_collection,
+                {'doc_id': arxiv_id, 'expires_at': {'$gt': __import__('datetime').datetime.utcnow()}},
+                limit=10000
+            )
+            if cached and len(cached) > 0:
+                cached_embeddings = cached
+                left_to_right_reveal(console, f"Loading cached embeddings ({len(cached)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
     except Exception as e:
         logger.debug(f"Could not check cached embeddings: {e}")
     
