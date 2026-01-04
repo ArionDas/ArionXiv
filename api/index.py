@@ -123,6 +123,16 @@ async def root():
 async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
+@app.get("/debug/env")
+async def debug_env():
+    """Debug endpoint to check if env vars are configured (returns only presence, not values)"""
+    return {
+        "OPENROUTER_API_KEY": "set" if os.environ.get("OPENROUTER_API_KEY") else "NOT SET",
+        "OPENROUTER_API_KEY_length": len(os.environ.get("OPENROUTER_API_KEY", "")),
+        "MONGODB_URI": "set" if os.environ.get("MONGODB_URI") else "NOT SET",
+        "JWT_SECRET_KEY": "set" if os.environ.get("JWT_SECRET_KEY") else "NOT SET",
+    }
+
 @app.get("/debug/db-test")
 async def debug_db_test():
     """Test MongoDB connection - remove after debugging"""
