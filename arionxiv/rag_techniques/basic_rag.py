@@ -95,7 +95,10 @@ class EmbeddingProvider(ABC):
 
 
 class GeminiEmbeddingProvider(EmbeddingProvider):
-    """Google Gemini embedding provider using gemini-embedding-001 model (FREE!)"""
+    """Google Gemini embedding provider using gemini-embedding-001 model (FREE!)
+    
+    Uses output_dimensionality=768 for efficient storage (default is 3072).
+    """
     
     def __init__(self, api_key: str = None, console: Console = None):
         if not GEMINI_AVAILABLE:
@@ -108,7 +111,7 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
         # Use new genai.Client() API
         self.client = genai.Client(api_key=self.api_key)
         self.model = "gemini-embedding-001"
-        self.dimension = 768
+        self.dimension = 768  # Using reduced dimensionality for efficiency
         self._console = console or Console()
         
         logger.info("Gemini embedding provider initialized with free API")
