@@ -427,92 +427,37 @@ Instructions:
 
 @app.post("/chat/message")
 async def send_chat_message(request: ChatMessageRequest, current_user: dict = Depends(verify_token)):
-    """Generate AI response using OpenRouter with session history support"""
+    """Generate AI response using OpenRouter - simplified version"""
     import httpx
-    import traceback
     
-    try:
-        openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-        if not openrouter_key:
-            raise HTTPException(500, "OPENROUTER_API_KEY not set in environment")
-        
-        # Fetch session history if session_id is provided
-        history_text = "No previous conversation."
-        session = None
-        db = None
-        if request.session_id:
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise HTTPException(500, detail="OPENROUTER_API_KEY not configured")
+    
+    prompt = f"Answer this question about a research paper: {request.message}"
+    
+    primary_model = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    models = [primary_model] + FALLBACK_MODELS[:3]  # Try up to 4 models
+    
+    last_error = ""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model in models:
             try:
-                db = get_db()
-                session = db.chat_sessions.find_one({
-                    "$or": [
-                        {"_id": ObjectId(request.session_id)},
-                        {"session_id": request.session_id}
-                    ],
-                    "user_id": current_user["user_id"]
-                })
-                if session and session.get("messages"):
-                    history_lines = []
-                    for msg in session["messages"][-10:]:
-                        role = "User" if msg.get("type") == "user" else "Assistant"
-                        history_lines.append(f"{role}: {msg.get('content', '')}")
-                    history_text = "\n".join(history_lines)
-            except Exception as db_err:
-                logger.warning(f"Session fetch error (continuing): {db_err}")
-        
-        # Build prompt
-        prompt = RAG_CHAT_PROMPT.format(history=history_text, message=request.message)
-        
-        primary_model = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-        models_to_try = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
-        
-        last_error = None
-        response_text = None
-        used_model = None
-        
-        async with httpx.AsyncClient() as client:
-            for model in models_to_try:
-                try:
-                    logger.info(f"Trying model: {model}")
-                    response = await client.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
-                        json={"model": model, "messages": [{"role": "user", "content": prompt}]},
-                        timeout=60.0
-                    )
-                    logger.info(f"OpenRouter response: {response.status_code}")
-                    if response.status_code == 200:
-                        data = response.json()
-                        response_text = data["choices"][0]["message"]["content"]
-                        used_model = model
-                        break
-                    else:
-                        last_error = f"{model}: HTTP {response.status_code} - {response.text[:200]}"
-                        logger.warning(last_error)
-                except Exception as model_err:
-                    last_error = f"{model}: {str(model_err)}"
-                    logger.warning(f"Model {model} failed: {model_err}")
-        
-        if not response_text:
-            raise HTTPException(500, f"All models failed. Last: {last_error}")
-        
-        # Update session if exists
-        if session and db:
-            try:
-                new_messages = session.get("messages", []) + [
-                    {"type": "user", "content": request.message, "timestamp": datetime.utcnow().isoformat()},
-                    {"type": "assistant", "content": response_text, "timestamp": datetime.utcnow().isoformat()}
-                ]
-                db.chat_sessions.update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"messages": new_messages, "updated_at": datetime.utcnow()}}
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openrouter_key}"},
+                    json={"model": model, "messages": [{"role": "user", "content": prompt}]}
                 )
-            except Exception:
-                pass
-        
-        return {"success": True, "response": response_text, "model": used_model}
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return {
+                        "success": True,
+                        "response": data["choices"][0]["message"]["content"],
+                        "model": model
+                    }
+                last_error = f"{model}: {resp.status_code} - {resp.text[:100]}"
+            except Exception as e:
+                last_error = f"{model}: {str(e)}"
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Chat endpoint error: {e}\n{traceback.format_exc()}")
-        raise HTTPException(500, f"Server error: {str(e)}")
+    raise HTTPException(500, detail=f"All models failed. Last: {last_error}")
+
