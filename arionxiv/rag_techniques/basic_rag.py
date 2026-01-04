@@ -286,15 +286,15 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
         if is_cached:
             # Model is cached on disk - quick load message
             self._console.print(
-                f"[{colors['muted']}]Loading embedding model from cache...[/{colors['muted']}]"
+                f"[dim {colors['primary']}]Loading embedding model from cache...[/dim {colors['primary']}]"
             )
         else:
             # First time - show download message
             self._console.print(
-                f"[{colors['muted']}]Downloading embedding model: {self.model_name}[/{colors['muted']}]"
+                f"[dim {colors['primary']}]Downloading embedding model: {self.model_name}[/dim {colors['primary']}]"
             )
             self._console.print(
-                f"[{colors['muted']}](First run downloads ~120MB, uses HuggingFace cache)[/{colors['muted']}]"
+                f"[dim {colors['primary']}](First run downloads ~120MB, uses HuggingFace cache)[/{colors['primary']}]"
             )
         
         try:
@@ -321,10 +321,10 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
             # Re-enable progress bars for other operations
             os.environ.pop('HF_HUB_DISABLE_PROGRESS_BARS', None)
             
-            self._console.print(
-                f"[{colors['primary']}][OK][/{colors['primary']}] Embedding model ready "
-                f"(dimension: {self._dimension})"
-            )
+            # self._console.print(
+            #     f"[{colors['primary']}][OK][/{colors['primary']}] Embedding model ready "
+            #     f"(dimension: {self._dimension})"
+            # )
             logger.info(f"Embedding model loaded successfully (dimension: {self._dimension})")
             
         except Exception as e:
@@ -670,7 +670,7 @@ class BasicRAG:
             
             # Show subtle hint for large papers
             if total_chunks > 20:
-                console.print(f"[white]Processing {total_chunks} chunks (this may take a moment for large papers)...[/white]")
+                console.print(f"\n[white]Processing [bold {colors['primary']}]{total_chunks} chunks [/bold {colors['primary']}](this may take a moment for large papers)...[/white]")
             
             # Ensure embedding model is loaded BEFORE showing the computation progress bar
             # This prevents model download progress from interfering with embedding progress
@@ -680,7 +680,7 @@ class BasicRAG:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                BarColumn(bar_width=40),
+                BarColumn(bar_width=50),
                 TaskProgressColumn(),
                 TextColumn("-"),
                 TimeRemainingColumn(),
