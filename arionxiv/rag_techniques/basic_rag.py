@@ -670,7 +670,7 @@ class BasicRAG:
             
             # Show subtle hint for large papers
             if total_chunks > 20:
-                console.print(f"\n[white]Processing [bold {colors['primary']}]{total_chunks} chunks [/bold {colors['primary']}](this may take a moment for large papers)...[/white]")
+                console.print(f"[white]Processing [bold {colors['primary']}]{total_chunks} chunks [/bold {colors['primary']}](this may take a moment for large papers)...[/white]")
             
             # Ensure embedding model is loaded BEFORE showing the computation progress bar
             # This prevents model download progress from interfering with embedding progress
