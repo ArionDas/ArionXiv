@@ -422,10 +422,11 @@ async def send_chat_message(request: ChatMessageRequest, current_user: dict = De
     
     # Fetch session history if session_id is provided
     history_text = "No previous conversation."
-    db = get_db()
     session = None
+    db = None
     if request.session_id:
         try:
+            db = get_db()
             session = db.chat_sessions.find_one({
                 "$or": [
                     {"_id": ObjectId(request.session_id)},
@@ -474,7 +475,7 @@ async def send_chat_message(request: ChatMessageRequest, current_user: dict = De
         raise HTTPException(500, f"All models failed. Last error: {last_error}")
     
     # Update session with new messages if session exists
-    if session:
+    if session and db:
         try:
             new_messages = session.get("messages", []) + [
                 {"type": "user", "content": request.message, "timestamp": datetime.utcnow().isoformat()},
