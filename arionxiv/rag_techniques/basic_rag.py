@@ -20,15 +20,12 @@ except ImportError:
     np = None
     SentenceTransformer = None
 
-import warnings
-# Suppress FutureWarning from deprecated google.generativeai package
-warnings.filterwarnings("ignore", message=".*google.generativeai.*", category=FutureWarning)
-
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
+    genai = None
 
 from rich.console import Console
 from rich.panel import Panel
@@ -98,19 +95,23 @@ class EmbeddingProvider(ABC):
 
 
 class GeminiEmbeddingProvider(EmbeddingProvider):
-    """Google Gemini embedding provider using embedding-001 model (FREE!)"""
+    """Google Gemini embedding provider using gemini-embedding-001 model (FREE!)
+    
+    Uses output_dimensionality=768 for efficient storage (default is 3072).
+    """
     
     def __init__(self, api_key: str = None, console: Console = None):
         if not GEMINI_AVAILABLE:
-            raise ImportError("google-generativeai not installed. Install with: pip install google-generativeai")
+            raise ImportError("google-genai not installed. Install with: pip install google-genai")
         
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise ValueError("Gemini API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.")
         
-        genai.configure(api_key=self.api_key)
-        self.model = "models/embedding-001"
-        self.dimension = 768
+        # Use new genai.Client() API
+        self.client = genai.Client(api_key=self.api_key)
+        self.model = "gemini-embedding-001"
+        self.dimension = 768  # Using reduced dimensionality for efficiency
         self._console = console or Console()
         
         logger.info("Gemini embedding provider initialized with free API")
@@ -130,12 +131,13 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                     retries = 0
                     while retries < max_retries:
                         try:
-                            result = genai.embed_content(
+                            # New API: client.models.embed_content()
+                            result = self.client.models.embed_content(
                                 model=self.model,
-                                content=text,
-                                task_type="retrieval_document"
+                                contents=text
                             )
-                            batch_embeddings.append(result['embedding'])
+                            # New API returns result.embeddings[0].values
+                            batch_embeddings.append(list(result.embeddings[0].values))
                             await asyncio.sleep(0.1)
                             break  # Success, exit retry loop
                         except Exception as e:
@@ -1022,6 +1024,8 @@ class BasicRAG:
                     )
             
             self._current_session_id = session_id
+            # Store session in memory so _chat_with_session can find it
+            self._in_memory_sessions[session_id] = session
             
             # Extend the session TTL by 24 hours
             await self.db_service.extend_chat_session_ttl(session_id, hours=24)
@@ -1155,33 +1159,32 @@ class BasicRAG:
             response_text = ""
             error_msg = ""
             
-            # Use OpenRouter for chat
+            # Try OpenRouter for chat, fallback to hosted API
             if self.openrouter_client and self.openrouter_client.is_available:
                 try:
-                    result = await self.openrouter_client.chat(
-                        message=message,
-                        context=context,
-                        history=chat_history
-                    )
-                    
+                    result = await self.openrouter_client.chat(message=message, context=context, history=chat_history)
+                    if result.get('success'):
+                        response_text, model_display, success = result['response'], result.get('model_display', 'OpenRouter'), True
+                    else:
+                        error_msg = result.get('error', 'OpenRouter failed')
+                except Exception as e:
+                    logger.debug(f"OpenRouter error: {e}")
+            
+            # Hosted API Fallback (using developer keys on backend)
+            if not success:
+                try:
+                    from ..cli.utils.api_client import api_client
+                    paper_id = session.get('arxiv_id') or session.get('paper_id')
+                    result = await api_client.send_chat_message(message=message, paper_id=paper_id, session_id=session_id)
                     if result.get('success'):
                         response_text = result['response']
-                        model_display = result.get('model_display', 'OpenRouter')
+                        model_display = result.get('model', 'ArionXiv Cloud')
                         success = True
                     else:
-                        error_msg = result.get('error', 'OpenRouter request failed')
-                except Exception as openrouter_err:
-                    error_str = str(openrouter_err).lower()
-                    # Check for rate limit errors and provide user-friendly message
-                    if 'rate' in error_str or '429' in error_str or 'limit' in error_str:
-                        error_msg = "API rate limit reached. Try again later or add your own API key with: arionxiv settings api"
-                    elif 'all models' in error_str:
-                        error_msg = "API rate limit reached. Try again later or add your own API key with: arionxiv settings api"
-                    else:
-                        error_msg = f"Chat service unavailable. Try again later or add your own API key with: arionxiv settings api"
-                    logger.debug(f"OpenRouter error: {openrouter_err}")
-            else:
-                error_msg = "API key not configured. Add your API key with: arionxiv settings api"
+                        error_msg = result.get('error', 'Hosted API failed')
+                except Exception as e:
+                    error_msg = f"Chat unavailable: {str(e)}"
+                    logger.debug(f"Hosted API error: {e}")
             
             if not success:
                 return {'success': False, 'error': error_msg or 'Failed to generate response'}

@@ -91,7 +91,9 @@ class AuthInterface:
                 if user:
                     return user
             elif choice == "3":
-                left_to_right_reveal(self.console, f"\n{style_text('Goodbye!', 'warning')}", duration=0.5)
+                colors = get_theme_colors()
+                primary_color = colors["primary"]
+                left_to_right_reveal(self.console, f"\n{style_text('Goodbye!', f'bold {primary_color}')}", duration=0.5)
                 return None
     
     async def _login_flow(self) -> Optional[Dict[str, Any]]:
@@ -119,7 +121,8 @@ class AuthInterface:
                     print_error(self.console, f"{style_text('Password is required', 'error')}")
                     continue
                 
-                self.console.print(f"\n[white]{style_text('Authenticating...', 'primary')}[/white]")
+                primary_color = get_theme_colors()["primary"]
+                self.console.print(f"\n{style_text('Authenticating...', f'bold {primary_color}')}")
                 logger.info(f"Attempting login for: {identifier}")
                 
                 result = await api_client.login(identifier, password)

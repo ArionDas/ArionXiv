@@ -87,14 +87,11 @@ Chat with research papers using AI:
 
 Powerful research capabilities:
 - Search arXiv database
-- Fetch papers with metadata
 - Analyze content with AI
 - Manage personal library
 
 [bold {primary_color}]Commands:[/bold {primary_color}]
 [bold {primary_color}]arionxiv search "query"[/bold {primary_color}]  Search papers
-[bold {primary_color}]arionxiv fetch ID[/bold {primary_color}]        Download paper
-[bold {primary_color}]arionxiv analyze file.pdf[/bold {primary_color}] AI analysis
 [bold {primary_color}]arionxiv library[/bold {primary_color}]         Manage collection"""
     
     settings_commands = f"""[bold {primary_color}]Customization[/bold {primary_color}]
@@ -129,11 +126,12 @@ Personalize your experience:
     print("\n")
     # Quick start guide
     quick_start_content = f"""
-[bold {primary_color}]Quick Start Guide:[/bold {primary_color}]
-[bold {primary_color}]1. arionxiv settings categories[/bold {primary_color}] - Set your research areas
-[bold {primary_color}]2. arionxiv daily --run[/bold {primary_color}] - Generate your first daily dose
-[bold {primary_color}]3. arionxiv chat[/bold {primary_color}] - Chat with a research paper
-[bold {primary_color}]4. arionxiv search "your topic"[/bold {primary_color}] - Find relevant papers"""
+[bold {primary_color}]Getting Started:[/bold {primary_color}]
+[bold {primary_color}]1. arionxiv register/login[/bold {primary_color}] - Register/login to get started [bold red](CRITICAL)[/bold red]
+[bold {primary_color}]2. arionxiv settings categories[/bold {primary_color}] - Set your research areas
+[bold {primary_color}]3. arionxiv daily --run[/bold {primary_color}] - Generate your first daily dose
+[bold {primary_color}]4. arionxiv chat[/bold {primary_color}] - Chat with a research paper
+[bold {primary_color}]5. arionxiv search "your topic"[/bold {primary_color}] - Find relevant papers"""
     
     tips_content = f"""
 [bold {primary_color}]Pro Tips:[/bold {primary_color}]

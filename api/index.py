@@ -379,3 +379,116 @@ async def get_daily_analysis(current_user: dict = Depends(verify_token)):
     if dose:
         dose["_id"] = str(dose["_id"])
     return {"success": True, "dose": dose}
+
+
+# Chat message endpoint - LLM inference via OpenRouter with fallback
+class ChatMessageRequest(BaseModel):
+    message: str
+    paper_id: str
+    session_id: Optional[str] = None
+
+# Fallback models (same as CLI openrouter_client.py)
+FALLBACK_MODELS = [
+    "google/gemma-3-27b-it:free",
+    "google/gemma-3-12b-it:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "moonshotai/kimi-k2:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+]
+
+# RAG Chat prompt template (same as prompts/prompts.py)
+RAG_CHAT_PROMPT = """You are an AI research assistant helping users understand research papers. Your role is to provide accurate, helpful answers based on the paper content.
+
+CONVERSATION HISTORY:
+{history}
+
+USER QUESTION: {message}
+
+Instructions:
+- Provide comprehensive, detailed answers
+- If you don't know, say so clearly
+- Be conversational but maintain technical accuracy
+- Structure longer answers with clear sections"""
+
+@app.post("/chat/message")
+async def send_chat_message(request: ChatMessageRequest, current_user: dict = Depends(verify_token)):
+    """Generate AI response using OpenRouter with session history support"""
+    import httpx
+    
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise HTTPException(500, "LLM not configured on server")
+    
+    # Fetch session history if session_id is provided
+    history_text = "No previous conversation."
+    db = get_db()
+    session = None
+    if request.session_id:
+        try:
+            session = db.chat_sessions.find_one({
+                "$or": [
+                    {"_id": ObjectId(request.session_id)},
+                    {"session_id": request.session_id}
+                ],
+                "user_id": current_user["user_id"]
+            })
+            if session and session.get("messages"):
+                history_lines = []
+                for msg in session["messages"][-10:]:  # Last 10 messages for context
+                    role = "User" if msg.get("type") == "user" else "Assistant"
+                    history_lines.append(f"{role}: {msg.get('content', '')}")
+                history_text = "\n".join(history_lines)
+        except Exception:
+            pass  # Continue without history on errors
+    
+    # Build prompt using rag_chat format
+    prompt = RAG_CHAT_PROMPT.format(history=history_text, message=request.message)
+    
+    primary_model = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    models_to_try = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
+    
+    last_error = None
+    response_text = None
+    used_model = None
+    
+    async with httpx.AsyncClient() as client:
+        for model in models_to_try:
+            try:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
+                    json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+                    timeout=60.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    response_text = data["choices"][0]["message"]["content"]
+                    used_model = model
+                    break
+                last_error = f"{model}: {response.status_code}"
+            except Exception as e:
+                last_error = f"{model}: {str(e)}"
+    
+    if not response_text:
+        raise HTTPException(500, f"All models failed. Last error: {last_error}")
+    
+    # Update session with new messages if session exists
+    if session:
+        try:
+            new_messages = session.get("messages", []) + [
+                {"type": "user", "content": request.message, "timestamp": datetime.utcnow().isoformat()},
+                {"type": "assistant", "content": response_text, "timestamp": datetime.utcnow().isoformat()}
+            ]
+            db.chat_sessions.update_one(
+                {"_id": session["_id"]},
+                {"$set": {"messages": new_messages, "updated_at": datetime.utcnow()}}
+            )
+        except Exception:
+            pass  # Don't fail the response if session update fails
+    
+    return {"success": True, "response": response_text, "model": used_model}
+
+
+
+

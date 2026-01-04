@@ -354,6 +354,10 @@ class UnifiedAnalysisService:
         """Continue a previous chat session"""
         await self.rag.continue_chat_session(session, paper_info)
     
+    async def chat(self, user_name: str, paper_id: str, message: str, session_id: str = None) -> Dict[str, Any]:
+        """Process a chat message using the RAG system"""
+        return await self.rag._chat_with_session(session_id, message)
+    
     # ====================
     # CLEANUP AND MAINTENANCE
     # ====================
