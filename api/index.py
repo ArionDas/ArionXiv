@@ -379,3 +379,59 @@ async def get_daily_analysis(current_user: dict = Depends(verify_token)):
     if dose:
         dose["_id"] = str(dose["_id"])
     return {"success": True, "dose": dose}
+
+
+# Chat message endpoint - LLM inference via OpenRouter with fallback
+class ChatMessageRequest(BaseModel):
+    message: str
+    paper_id: str
+    session_id: Optional[str] = None
+
+# Fallback models (same as CLI openrouter_client.py)
+FALLBACK_MODELS = [
+    "google/gemma-3-27b-it:free",
+    "google/gemma-3-12b-it:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "moonshotai/kimi-k2:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+]
+
+@app.post("/chat/message")
+async def send_chat_message(request: ChatMessageRequest, current_user: dict = Depends(verify_token)):
+    """Generate AI response using OpenRouter with model fallback"""
+    import httpx
+    
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise HTTPException(500, "LLM not configured on server")
+    
+    primary_model = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    models_to_try = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
+    
+    prompt = f"""You are answering questions about a research paper (arXiv ID: {request.paper_id}).
+User question: {request.message}
+
+Provide a helpful, accurate response based on your knowledge of this paper."""
+    
+    last_error = None
+    async with httpx.AsyncClient() as client:
+        for model in models_to_try:
+            try:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"},
+                    json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+                    timeout=60.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return {"success": True, "response": data["choices"][0]["message"]["content"], "model": model}
+                last_error = f"{model}: {response.status_code}"
+            except Exception as e:
+                last_error = f"{model}: {str(e)}"
+    
+    raise HTTPException(500, f"All models failed. Last error: {last_error}")
+
+
+

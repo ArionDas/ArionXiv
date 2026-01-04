@@ -343,7 +343,7 @@ class UnifiedDatabaseService:
             return None
             
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return None
             
         try:
@@ -380,7 +380,7 @@ class UnifiedDatabaseService:
             raise ConnectionError("Database connection is not available. Please check your MongoDB connection string in the .env file.")
             
         if self.db is None:
-            logger.error("No database connection available")
+            logger.debug("No database connection available")
             raise ConnectionError("Database connection is not available. Please check your MongoDB connection string in the .env file.")
             
         try:
@@ -403,7 +403,7 @@ class UnifiedDatabaseService:
         """
 
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return None
             
         try:
@@ -416,7 +416,7 @@ class UnifiedDatabaseService:
     async def delete_one(self, collection: str, filter_dict: Dict[str, Any]):
         """Delete a single document from a collection"""
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return None
             
         try:
@@ -438,7 +438,7 @@ class UnifiedDatabaseService:
             List[Dict[str, Any]]: Results from the aggregation
         """
         if self.db is None:
-            logger.warning("No database connection available")
+            logger.debug("No database connection available")
             return []
             
         try:

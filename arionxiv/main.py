@@ -1,9 +1,6 @@
 """
 Main CLI entry point for ArionXiv package
 """
-# Suppress FutureWarning from deprecated google.generativeai package
-import warnings
-warnings.filterwarnings("ignore", message=".*google.generativeai.*", category=FutureWarning)
 
 import sys
 import logging
