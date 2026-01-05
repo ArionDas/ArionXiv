@@ -252,7 +252,7 @@ def preferences_overview(reset: bool):
         console.print(f"\n{style_text('Quick Actions:', 'primary')}")
         actions = [
             ("categories", "Configure research categories"),
-            ("keywords", "Manage keywords & exclusions")
+            ("keywords", "Manage keywords & exclusions"),
             ("daily", "Daily dose settings")
         ]
         
