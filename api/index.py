@@ -538,36 +538,88 @@ async def run_daily_dose(current_user: dict = Depends(verify_token)):
 # Embeddings cache endpoints - for avoiding re-processing PDFs
 @app.get("/embeddings/{paper_id}")
 async def get_embeddings(paper_id: str, current_user: dict = Depends(verify_token)):
-    """Get cached embeddings for a paper"""
+    """Get cached embeddings for a paper (handles batched storage)"""
     db = get_db()
-    cached = db.paper_embeddings.find_one({
+    
+    # Find all batches for this paper
+    batches = list(db.paper_embeddings.find({
         "paper_id": paper_id,
-        "user_id": current_user["user_id"]
-    })
-    if cached:
-        cached["_id"] = str(cached["_id"])
-        return {"success": True, "embeddings": cached.get("embeddings", []), "chunks": cached.get("chunks", [])}
-    return {"success": False, "message": "No cached embeddings found"}
+        "user_id": current_user["user_id"],
+        "expires_at": {"$gt": datetime.utcnow()}  # Only non-expired
+    }).sort("batch_index", 1))  # Sort by batch_index
+    
+    if not batches:
+        return {"success": False, "message": "No cached embeddings found"}
+    
+    # Combine all batches
+    all_embeddings = []
+    all_chunks = []
+    
+    for batch in batches:
+        all_embeddings.extend(batch.get("embeddings", []))
+        all_chunks.extend(batch.get("chunks", []))
+    
+    logger.info(f"Retrieved {len(batches)} batches ({len(all_embeddings)} total chunks) for {paper_id}")
+    
+    return {
+        "success": True,
+        "embeddings": all_embeddings,
+        "chunks": all_chunks,
+        "batches": len(batches)
+    }
 
 
 @app.post("/embeddings/{paper_id}")
 async def save_embeddings(paper_id: str, request: dict, current_user: dict = Depends(verify_token)):
-    """Save embeddings for a paper with 24-hour TTL"""
-    db = get_db()
-    embeddings_data = {
-        "paper_id": paper_id,
-        "user_id": current_user["user_id"],
-        "embeddings": request.get("embeddings", []),
-        "chunks": request.get("chunks", []),
-        "updated_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(hours=24)  # 24-hour TTL
-    }
-    db.paper_embeddings.update_one(
-        {"paper_id": paper_id, "user_id": current_user["user_id"]},
-        {"$set": embeddings_data},
-        upsert=True
-    )
-    return {"success": True, "message": "Embeddings saved"}
+    """Save embeddings for a paper with 24-hour TTL, supports batched uploads"""
+    try:
+        db = get_db()
+        
+        # Validate request data
+        embeddings = request.get("embeddings", [])
+        chunks = request.get("chunks", [])
+        batch_index = request.get("batch_index", 0)
+        total_batches = request.get("total_batches", 1)
+        
+        if not embeddings or not chunks:
+            return {"success": False, "message": "Missing embeddings or chunks"}
+        
+        user_id = current_user["user_id"]
+        
+        # For first batch, clear any existing embeddings
+        if batch_index == 0:
+            db.paper_embeddings.delete_many({
+                "paper_id": paper_id,
+                "user_id": user_id
+            })
+        
+        # Save this batch of embeddings
+        # Each batch is stored as a separate document with a batch_index
+        embeddings_data = {
+            "paper_id": paper_id,
+            "user_id": user_id,
+            "batch_index": batch_index,
+            "total_batches": total_batches,
+            "embeddings": embeddings,
+            "chunks": chunks,
+            "updated_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(hours=24)  # 24-hour TTL
+        }
+        
+        db.paper_embeddings.insert_one(embeddings_data)
+        
+        logger.info(f"Saved batch {batch_index + 1}/{total_batches} ({len(embeddings)} chunks) for {paper_id}")
+        
+        return {
+            "success": True,
+            "message": f"Batch {batch_index + 1}/{total_batches} saved",
+            "batch_index": batch_index,
+            "total_batches": total_batches,
+            "count": len(embeddings)
+        }
+    except Exception as e:
+        logger.error(f"Error saving embeddings batch for {paper_id}: {e}", exc_info=True)
+        return {"success": False, "message": f"Error saving embeddings: {str(e)}"}
 
 
 # Chat message endpoint - LLM inference via OpenRouter with fallback
