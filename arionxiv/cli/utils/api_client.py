@@ -475,18 +475,27 @@ class ArionXivAPIClient:
     
     async def save_embeddings(self, paper_id: str, embeddings: List, chunks: List) -> Dict[str, Any]:
         """Save embeddings for a paper in batches to avoid size limits"""
-        import sys
+        import json
         
-        # Calculate batch size to stay under 3MB per request (safe margin for 4.5MB Vercel limit)
+        # Stay under 3MB per request to provide safety margin for Vercel's 4.5MB payload limit
         MAX_BATCH_SIZE_BYTES = 3_000_000
-        batch_size = 50  # Start with 50 chunks per batch
+        
+        # Dynamically calculate batch size based on actual embedding dimensions
+        # Embeddings can vary (384 dims vs 1536 dims), so we estimate from first chunk
+        if embeddings and chunks:
+            sample_payload = json.dumps({"embeddings": [embeddings[0]], "chunks": [chunks[0]]})
+            chunk_size = len(sample_payload)
+            batch_size = max(10, min(100, MAX_BATCH_SIZE_BYTES // chunk_size))
+        else:
+            batch_size = 50  # Default fallback
         
         # If total payload is small, send in one request
-        total_size = sys.getsizeof(str(embeddings)) + sys.getsizeof(str(chunks))
+        payload = {"embeddings": embeddings, "chunks": chunks}
+        total_size = len(json.dumps(payload))
         if total_size < MAX_BATCH_SIZE_BYTES:
             response = await self.httpx_client.post(
                 f"/embeddings/{paper_id}",
-                json={"embeddings": embeddings, "chunks": chunks, "batch_index": 0, "total_batches": 1},
+                json={**payload, "batch_index": 0, "total_batches": 1},
                 headers=self._get_headers()
             )
             return await self._handle_response(response)

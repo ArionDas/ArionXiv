@@ -584,6 +584,9 @@ async def save_embeddings(paper_id: str, request: dict, current_user: dict = Dep
         if not embeddings or not chunks:
             return {"success": False, "message": "Missing embeddings or chunks"}
         
+        if len(embeddings) != len(chunks):
+            return {"success": False, "message": "Embeddings and chunks must have the same length"}
+        
         user_id = current_user["user_id"]
         
         # For first batch, clear any existing embeddings
