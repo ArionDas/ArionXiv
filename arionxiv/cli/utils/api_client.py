@@ -474,13 +474,57 @@ class ArionXivAPIClient:
         return await self._handle_response(response)
     
     async def save_embeddings(self, paper_id: str, embeddings: List, chunks: List) -> Dict[str, Any]:
-        """Save embeddings for a paper"""
-        response = await self.httpx_client.post(
-            f"/embeddings/{paper_id}",
-            json={"embeddings": embeddings, "chunks": chunks},
-            headers=self._get_headers()
-        )
-        return await self._handle_response(response)
+        """Save embeddings for a paper in batches to avoid size limits"""
+        import json
+        
+        # Stay under 3MB per request to provide safety margin for Vercel's 4.5MB payload limit
+        MAX_BATCH_SIZE_BYTES = 3_000_000
+        
+        # Dynamically calculate batch size based on actual embedding dimensions
+        # Embeddings can vary (384 dims vs 1536 dims), so we estimate from first chunk
+        if embeddings and chunks:
+            sample_payload = json.dumps({"embeddings": [embeddings[0]], "chunks": [chunks[0]]})
+            chunk_size = len(sample_payload)
+            batch_size = max(10, min(100, MAX_BATCH_SIZE_BYTES // chunk_size))
+        else:
+            batch_size = 50  # Default fallback
+        
+        # If total payload is small, send in one request
+        payload = {"embeddings": embeddings, "chunks": chunks}
+        total_size = len(json.dumps(payload))
+        if total_size < MAX_BATCH_SIZE_BYTES:
+            response = await self.httpx_client.post(
+                f"/embeddings/{paper_id}",
+                json={**payload, "batch_index": 0, "total_batches": 1},
+                headers=self._get_headers()
+            )
+            return await self._handle_response(response)
+        
+        # Send in batches for large papers
+        total_chunks = len(embeddings)
+        total_batches = (total_chunks + batch_size - 1) // batch_size
+        
+        for i in range(0, total_chunks, batch_size):
+            batch_embeddings = embeddings[i:i + batch_size]
+            batch_chunks = chunks[i:i + batch_size]
+            batch_index = i // batch_size
+            
+            response = await self.httpx_client.post(
+                f"/embeddings/{paper_id}",
+                json={
+                    "embeddings": batch_embeddings,
+                    "chunks": batch_chunks,
+                    "batch_index": batch_index,
+                    "total_batches": total_batches
+                },
+                headers=self._get_headers()
+            )
+            
+            result = await self._handle_response(response)
+            if not result.get("success"):
+                return result
+        
+        return {"success": True, "message": f"Saved {total_chunks} embeddings in {total_batches} batches"}
     
     # =========================================================================
     # HEALTH CHECK

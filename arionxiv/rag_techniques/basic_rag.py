@@ -733,10 +733,35 @@ class BasicRAG:
         logger.info(f"Cleared {count} embeddings from memory")
     
     async def _get_cached_embeddings(self, doc_id: str) -> Optional[List[Dict[str, Any]]]:
-        """Check if embeddings for a document are cached in the database (24-hour TTL)"""
+        """Check if embeddings for a document are cached (tries API first, then local DB)"""
         try:
-            # Find all embeddings for this document that haven't expired
-            # Use a high limit to ensure we get all chunks (default find_many limit is 100)
+            # First, try to get from API (cloud cache - accessible across devices)
+            try:
+                from ..cli.utils.api_client import api_client
+                api_result = await api_client.get_embeddings(doc_id)
+                if api_result.get("success"):
+                    embeddings = api_result.get("embeddings", [])
+                    chunks = api_result.get("chunks", [])
+                    batches = api_result.get("batches", 1)
+                    
+                    if embeddings and chunks:
+                        logger.info(f"Found {len(embeddings)} cached embeddings from cloud ({batches} batches) for {doc_id}")
+                        
+                        # Convert to the format expected by _load_embeddings_from_cache
+                        cached = []
+                        for i, (embedding, chunk) in enumerate(zip(embeddings, chunks)):
+                            cached.append({
+                                'chunk_id': f"{doc_id}_chunk_{i}",
+                                'doc_id': doc_id,
+                                'chunk_text': chunk,
+                                'embedding': embedding,
+                                'expires_at': datetime.utcnow() + timedelta(hours=24)
+                            })
+                        return cached
+            except Exception as api_err:
+                logger.debug(f"Cloud cache not available, trying local: {api_err}")
+            
+            # Fall back to local database cache
             cached = await self.db_service.find_many(
                 self.vector_collection,
                 {
@@ -747,7 +772,7 @@ class BasicRAG:
             )
             
             if cached and len(cached) > 0:
-                logger.info(f"Found {len(cached)} cached embeddings for document {doc_id}")
+                logger.info(f"Found {len(cached)} cached embeddings from local DB for {doc_id}")
                 return cached
             return None
             
@@ -759,17 +784,22 @@ class BasicRAG:
         """Save embeddings to API and local database with 24-hour TTL"""
         try:
             # First, try to save to API (cloud storage - accessible across devices)
+            api_saved = False
             try:
                 from ..cli.utils.api_client import api_client
                 api_result = await api_client.save_embeddings(doc_id, embeddings, chunks)
                 if api_result.get("success"):
-                    logger.info(f"Saved {len(embeddings)} embeddings to API cache for document {doc_id}")
+                    batches = api_result.get("message", "")
+                    logger.info(f"✓ Saved {len(embeddings)} embeddings to cloud cache: {batches}")
+                    api_saved = True
                 else:
-                    logger.warning(f"Failed to save embeddings to API: {api_result}")
+                    error_msg = api_result.get("message", "Unknown error")
+                    logger.debug(f"Cloud cache not available: {error_msg}")
             except Exception as api_err:
-                logger.warning(f"Could not save embeddings to API: {api_err}")
+                # Silently fall back to local cache - this is expected when offline or API unavailable
+                logger.debug(f"Using local cache only: {api_err}")
             
-            # Also save to local DB as backup (if available)
+            # Always save to local DB as backup
             expires_at = datetime.utcnow() + timedelta(hours=24)
             
             # Delete any existing embeddings for this document first
