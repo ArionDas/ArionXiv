@@ -426,19 +426,23 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
     
     left_to_right_reveal(console, f"\nResuming chat with: {paper_title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    # Check for cached embeddings first - if available, skip PDF download
-    cached_embeddings = None
+    # Check for cached embeddings via API first - if available, skip PDF download
+    cached_data = None
     try:
-        from ...services.unified_database_service import unified_database_service
-        if unified_database_service.db is not None:
-            cached_embeddings = await unified_database_service.get_cached_embeddings(paper_id)
-    except Exception:
-        # No local MongoDB or method not available - embeddings will be regenerated
-        cached_embeddings = None
+        result = await api_client.get_embeddings(paper_id)
+        if result.get("success") and result.get("embeddings"):
+            cached_data = {
+                "embeddings": result.get("embeddings", []),
+                "chunks": result.get("chunks", [])
+            }
+            logger.debug(f"Found {len(cached_data['embeddings'])} cached embeddings via API")
+    except Exception as e:
+        logger.debug(f"No cached embeddings found via API: {e}")
+        cached_data = None
     
-    if cached_embeddings:
+    if cached_data and cached_data.get("embeddings"):
         # Use cached embeddings - no need to download PDF or extract text
-        left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_embeddings)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
+        left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_data['chunks'])} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
         
         # Fetch minimal paper metadata for the chat
         paper_metadata = await asyncio.to_thread(arxiv_client.get_paper_by_id, paper_id)
@@ -448,7 +452,8 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
             'authors': paper_metadata.get('authors', []) if paper_metadata else [],
             'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')) if paper_metadata else '',
             'full_text': '',  # Not needed when using cached embeddings
-            '_cached_embeddings': cached_embeddings  # Pass cached embeddings
+            '_cached_embeddings': cached_data['embeddings'],  # Pass cached embeddings
+            '_cached_chunks': cached_data['chunks']  # Pass cached chunks
         }
     else:
         # No cached embeddings - need to download PDF and extract text
@@ -518,25 +523,21 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
     
     left_to_right_reveal(console, f"\nSelected: {title}", style=f"bold {colors['primary']}", duration=0.5)
     
-    # Check for cached embeddings in DB first (optional - local MongoDB not required)
-    cached_embeddings = None
+    # Check for cached embeddings via API first
+    cached_data = None
     try:
-        from ...services.unified_database_service import unified_database_service
-        if unified_database_service.db is not None:
-            vector_collection = "paper_embeddings"
-            cached = await unified_database_service.find_many(
-                vector_collection,
-                {'doc_id': arxiv_id, 'expires_at': {'$gt': __import__('datetime').datetime.utcnow()}},
-                limit=10000
-            )
-            if cached and len(cached) > 0:
-                cached_embeddings = cached
-                left_to_right_reveal(console, f"Loading cached embeddings ({len(cached)} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
+        result = await api_client.get_embeddings(arxiv_id)
+        if result.get("success") and result.get("embeddings"):
+            cached_data = {
+                "embeddings": result.get("embeddings", []),
+                "chunks": result.get("chunks", [])
+            }
+            left_to_right_reveal(console, f"Loading cached embeddings ({len(cached_data['chunks'])} chunks)...", style=f"bold {colors['primary']}", duration=0.5)
     except Exception as e:
         logger.debug(f"Could not check cached embeddings: {e}")
     
     text_content = None
-    if not cached_embeddings:
+    if not cached_data or not cached_data.get("embeddings"):
         # No cache - need to download and process PDF
         pdf_url = paper.get('pdf_url')
         if not pdf_url:
@@ -577,7 +578,8 @@ async def _start_chat_with_paper(console: Console, colors: Dict, user_name: str,
         'abstract': paper.get('summary', paper.get('abstract', '')),
         'published': paper.get('published', ''),
         'full_text': text_content or '',  # Empty if using cached embeddings
-        '_cached_embeddings': cached_embeddings  # Pass cached embeddings to RAG
+        '_cached_embeddings': cached_data.get('embeddings') if cached_data else None,  # Pass cached embeddings to RAG
+        '_cached_chunks': cached_data.get('chunks') if cached_data else None  # Pass cached chunks to RAG
     }
     
     left_to_right_reveal(console, "\nStarting chat session...\n", style=f"bold {colors['primary']}", duration=0.5)

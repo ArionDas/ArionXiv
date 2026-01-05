@@ -72,59 +72,56 @@ def daily_command(config: bool, run: bool, view: bool, dose: bool):
 
 
 async def _run_daily_dose():
-    """Generate a new daily dose via API"""
+    """Show info about daily dose generation (runs via GitHub Actions cron)"""
     colors = get_theme_colors()
     
-    console.print(f"\n[bold {colors['primary']}]Generating Your Daily Dose[/bold {colors['primary']}]")
+    console.print(f"\n[bold {colors['primary']}]Daily Dose Generation[/bold {colors['primary']}]")
     console.rule(style=f"bold {colors['primary']}")
     
+    # Get user's settings to show their scheduled time
     try:
-        console.print(f"[bold {colors['primary']}]Fetching fresh papers from arXiv via API...[/bold {colors['primary']}]")
-        console.print(f"[dim {colors['muted']}]This may take 1-2 minutes to search and analyze papers[/dim {colors['muted']}]")
+        settings_result = await api_client.get_daily_settings()
         
-        # Run daily dose via API - this runs on the server
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-            task = progress.add_task(f"[bold {colors['primary']}]Generating daily dose...", total=None)
-            result = await api_client.run_daily_dose()
-        
-        console.rule(style=f"bold {colors['primary']}")
-        
-        if result.get("success"):
-            papers_count = result.get("papers_count", 0)
+        if settings_result.get("success"):
+            settings = settings_result.get("settings", {})
+            scheduled_hour = settings.get("scheduled_hour", 8)
+            timezone = settings.get("timezone", "UTC")
+            enabled = settings.get("enabled", True)
+            keywords = settings.get("keywords", [])
             
-            print_success(console, "Daily dose generated successfully!")
-            console.print(f"[bold {colors['primary']}]Papers analyzed:[/bold {colors['primary']}] {papers_count}")
+            console.print(f"\n[bold {colors['secondary']}]📅 Daily Dose is generated automatically via GitHub Actions[/bold {colors['secondary']}]")
+            console.print()
             
-            if papers_count > 0:
-                console.print(f"\nView your daily dose with:")
-                console.print(f"  [bold {colors['primary']}]arionxiv daily --dose[/bold {colors['primary']}]")
+            if enabled:
+                console.print(f"[bold {colors['primary']}]Your schedule:[/bold {colors['primary']}]")
+                console.print(f"  • Time: [bold]{scheduled_hour:02d}:00[/bold] ({timezone})")
+                console.print(f"  • Keywords: [bold]{', '.join(keywords) if keywords else 'None set'}[/bold]")
+                console.print()
+                console.print(f"[{colors['muted']}]The GitHub Actions cron job runs hourly and generates your[/{colors['muted']}]")
+                console.print(f"[{colors['muted']}]personalized daily dose at your scheduled time.[/{colors['muted']}]")
             else:
-                print_warning(console, "No papers found matching your keywords.")
-                console.print(f"\nTry adjusting your keywords in settings:")
+                print_warning(console, "Daily dose is currently disabled.")
+                console.print(f"\nEnable it with:")
                 console.print(f"  [bold {colors['primary']}]arionxiv settings daily[/bold {colors['primary']}]")
+            
+            console.print(f"\n[bold {colors['secondary']}]To view your latest daily dose:[/bold {colors['secondary']}]")
+            console.print(f"  [bold {colors['primary']}]arionxiv daily --dose[/bold {colors['primary']}]")
+            
+            console.print(f"\n[bold {colors['secondary']}]To update your settings:[/bold {colors['secondary']}]")
+            console.print(f"  [bold {colors['primary']}]arionxiv settings daily[/bold {colors['primary']}]")
+            
+            console.print(f"\n[bold {colors['secondary']}]To manually trigger (requires GitHub repo access):[/bold {colors['secondary']}]")
+            console.print(f"  [bold {colors['primary']}]Go to your repo's Actions tab and run 'ArionXiv Daily Dose' workflow[/bold {colors['primary']}]")
         else:
-            msg = result.get("message", "Unknown error")
-            print_error(console, f"Failed to generate daily dose: {msg}")
+            msg = settings_result.get("message", "Unknown error")
+            print_error(console, f"Failed to get daily settings: {msg}")
             
     except APIClientError as e:
-        logger.error(f"Daily dose API error: {e}", exc_info=True)
-        # Check if it's a timeout - daily dose can take a while
-        if "timeout" in str(e).lower() or e.status_code == 504:
-            print_warning(console, "Daily dose generation is taking longer than expected.")
-            console.print(f"The server is still processing. Check back in a few minutes with:")
-            console.print(f"  [bold {colors['primary']}]arionxiv daily --dose[/bold {colors['primary']}]")
-        else:
-            print_error(console, f"API error: {e.message}")
+        logger.error(f"Daily settings API error: {e}", exc_info=True)
+        print_error(console, f"API error: {e.message}")
     except Exception as e:
-        logger.error(f"Daily dose error: {e}", exc_info=True)
-        error_panel = Panel(
-            f"[{colors['error']}]Error:[/{colors['error']}] {str(e)}\n\n"
-            f"Failed to generate your daily dose.\n"
-            f"Please check your connection and try again.",
-            title="[bold]Daily Dose Generation Failed[/bold]",
-            border_style=f"bold {colors['error']}"
-        )
-        console.print(error_panel)
+        logger.error(f"Daily settings error: {e}", exc_info=True)
+        print_error(console, str(e))
 
 
 async def _view_daily_dose():

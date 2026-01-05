@@ -756,8 +756,20 @@ class BasicRAG:
             return None
     
     async def _save_embeddings_to_cache(self, doc_id: str, chunks: List[str], embeddings: List[List[float]], metadata: Dict[str, Any] = None):
-        """Save embeddings to database with 24-hour TTL"""
+        """Save embeddings to API and local database with 24-hour TTL"""
         try:
+            # First, try to save to API (cloud storage - accessible across devices)
+            try:
+                from ..cli.utils.api_client import api_client
+                api_result = await api_client.save_embeddings(doc_id, embeddings, chunks)
+                if api_result.get("success"):
+                    logger.info(f"Saved {len(embeddings)} embeddings to API cache for document {doc_id}")
+                else:
+                    logger.warning(f"Failed to save embeddings to API: {api_result}")
+            except Exception as api_err:
+                logger.warning(f"Could not save embeddings to API: {api_err}")
+            
+            # Also save to local DB as backup (if available)
             expires_at = datetime.utcnow() + timedelta(hours=24)
             
             # Delete any existing embeddings for this document first
@@ -782,23 +794,44 @@ class BasicRAG:
             
             if documents:
                 await self.db_service.insert_many(self.vector_collection, documents)
-                logger.info(f"Saved {len(documents)} embeddings to cache for document {doc_id} (expires in 24h)")
+                logger.info(f"Saved {len(documents)} embeddings to local cache for document {doc_id} (expires in 24h)")
             
         except Exception as e:
-            logger.warning(f"Failed to save embeddings to cache: {str(e)}")
+            logger.warning(f"Failed to save embeddings to local cache: {str(e)}")
     
-    async def _load_embeddings_from_cache(self, cached_embeddings: List[Dict[str, Any]]):
-        """Load cached embeddings into session memory"""
-        for doc in cached_embeddings:
-            chunk_id = doc.get('chunk_id')
-            self._session_embeddings[chunk_id] = {
-                'doc_id': doc.get('doc_id'),
-                'chunk_id': chunk_id,
-                'text': doc.get('text'),
-                'embedding': doc.get('embedding'),
-                'metadata': doc.get('metadata', {})
-            }
-        logger.info(f"Loaded {len(cached_embeddings)} embeddings from cache to session memory")
+    async def _load_embeddings_from_cache(self, cached_embeddings: List[Dict[str, Any]], cached_chunks: List[str] = None):
+        """Load cached embeddings into session memory
+        
+        Args:
+            cached_embeddings: Either a list of raw embedding vectors (from API), or
+                              a list of dict objects with 'embedding', 'text', etc. (from local DB)
+            cached_chunks: Optional list of text chunks (only provided when embeddings are raw vectors from API)
+        """
+        # Handle API format (parallel lists of embeddings and chunks)
+        if cached_chunks and cached_embeddings and isinstance(cached_embeddings[0], list):
+            # API format: embeddings is a list of vectors, chunks is a list of strings
+            for i, (embedding, chunk) in enumerate(zip(cached_embeddings, cached_chunks)):
+                chunk_id = f"cached_chunk_{i}"
+                self._session_embeddings[chunk_id] = {
+                    'doc_id': 'cached',
+                    'chunk_id': chunk_id,
+                    'text': chunk,
+                    'embedding': embedding,
+                    'metadata': {}
+                }
+            logger.info(f"Loaded {len(cached_embeddings)} embeddings from API cache to session memory")
+        else:
+            # Local DB format: list of dicts with 'embedding', 'text', etc.
+            for doc in cached_embeddings:
+                chunk_id = doc.get('chunk_id')
+                self._session_embeddings[chunk_id] = {
+                    'doc_id': doc.get('doc_id'),
+                    'chunk_id': chunk_id,
+                    'text': doc.get('text'),
+                    'embedding': doc.get('embedding'),
+                    'metadata': doc.get('metadata', {})
+                }
+            logger.info(f"Loaded {len(cached_embeddings)} embeddings from local cache to session memory")
 
     async def search_similar_documents(self, query: str, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Search for similar documents using cosine similarity (in-memory)"""
@@ -891,11 +924,12 @@ class BasicRAG:
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
-            # Check if cached embeddings were passed (already fetched from DB)
+            # Check if cached embeddings were passed (already fetched from API/DB)
             cached_embeddings = paper.get('_cached_embeddings')
+            cached_chunks = paper.get('_cached_chunks')
             if cached_embeddings:
                 # Load cached embeddings directly into session memory
-                await self._load_embeddings_from_cache(cached_embeddings)
+                await self._load_embeddings_from_cache(cached_embeddings, cached_chunks)
                 logger.info(f"Loaded {len(cached_embeddings)} pre-cached embeddings for paper {paper_id}")
             else:
                 # Generate embeddings and store in memory - with progress bar
@@ -1005,11 +1039,12 @@ class BasicRAG:
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
-            # Check if cached embeddings were passed
+            # Check if cached embeddings were passed (from API)
             cached_embeddings = paper_info.get('_cached_embeddings')
+            cached_chunks = paper_info.get('_cached_chunks')
             if cached_embeddings:
                 # Use pre-loaded cached embeddings directly
-                self._session_embeddings = cached_embeddings
+                await self._load_embeddings_from_cache(cached_embeddings, cached_chunks)
                 logger.info(f"Loaded {len(cached_embeddings)} cached embeddings for session")
             else:
                 # Re-index the paper content
