@@ -58,7 +58,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          RAG_LLM_PROVIDER: ${{ vars.RAG_LLM_PROVIDER || 'openrouter' }}
+          RAG_LLM_PROVIDER: openrouter
           FORCE_HOUR: ${{ github.event.inputs.force_hour }}
         run: |
           python -m arionxiv.github_actions_runner

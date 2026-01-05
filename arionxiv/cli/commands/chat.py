@@ -122,25 +122,25 @@ async def _show_chat_menu(console: Console, colors: Dict, user_name: str) -> Opt
         user_papers = await _get_user_papers_from_api()
         active_sessions = await _get_chat_sessions_from_api()
         
-        left_to_right_reveal(console, "What would you like to do?", style=f"bold {colors['primary']}", duration=0.5)
+        left_to_right_reveal(console, "What would you like to do?", style=f"bold {colors['primary']}", duration=0.3)
         console.print()
-        left_to_right_reveal(console, "1. Search for a new paper", style=f"bold {colors['primary']}", duration=0.5)
+        left_to_right_reveal(console, "1. Search for a new paper", style=f"bold {colors['primary']}", duration=0.3)
         
         if user_papers:
             left_to_right_reveal(console, f"2. Chat with saved papers ({len(user_papers)} saved)", 
-                               style=f"bold {colors['primary']}", duration=0.5)
+                               style=f"bold {colors['primary']}", duration=0.3)
         else:
             left_to_right_reveal(console, "2. Chat with saved papers (none saved)", 
-                               style=f"bold {colors['primary']}", duration=0.5)
+                               style=f"bold {colors['primary']}", duration=0.3)
         
         if active_sessions:
             left_to_right_reveal(console, f"3. Continue a previous chat ({len(active_sessions)} active)", 
-                               style=f"bold {colors['primary']}", duration=0.5)
+                               style=f"bold {colors['primary']}", duration=0.3)
         else:
             left_to_right_reveal(console, "3. Continue a previous chat (no active sessions)", 
-                               style=f"bold {colors['primary']}", duration=0.5)
+                               style=f"bold {colors['primary']}", duration=0.3)
         
-        left_to_right_reveal(console, "0. Exit", style=f"bold {colors['primary']}", duration=0.5)
+        left_to_right_reveal(console, "0. Exit", style=f"bold {colors['primary']}", duration=0.2)
         
         choice = Prompt.ask(f"\n[bold {colors['primary']}]Select option[/bold {colors['primary']}]", 
                           choices=["0", "1", "2", "3"], default="1")
@@ -155,7 +155,7 @@ async def _show_chat_menu(console: Console, colors: Dict, user_name: str) -> Opt
         elif choice == "2":
             if not user_papers:
                 left_to_right_reveal(console, "\nNo saved papers. Please search for a paper first.", 
-                                   style=f"bold {colors['warning']}", duration=0.5)
+                                   style=f"bold {colors['warning']}", duration=0.3)
                 result = await _search_and_select_paper(console, colors)
                 if result == "GO_BACK":
                     continue
@@ -168,7 +168,7 @@ async def _show_chat_menu(console: Console, colors: Dict, user_name: str) -> Opt
         elif choice == "3":
             if not active_sessions:
                 left_to_right_reveal(console, "\nNo active chat sessions within the last 24 hours.", 
-                                   style=f"bold {colors['warning']}", duration=0.5)
+                                   style=f"bold {colors['warning']}", duration=0.3)
                 continue
             result = await _select_and_continue_session(console, colors, user_name, active_sessions)
             if result == "GO_BACK":

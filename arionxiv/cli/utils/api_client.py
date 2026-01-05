@@ -453,6 +453,14 @@ class ArionXivAPIClient:
         )
         return await self._handle_response(response)
     
+    async def run_daily_dose(self) -> Dict[str, Any]:
+        """Run daily dose analysis"""
+        response = await self.httpx_client.post(
+            "/daily/run",
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
     # =========================================================================
     # EMBEDDINGS CACHE ENDPOINTS
     # =========================================================================
