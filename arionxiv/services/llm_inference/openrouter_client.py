@@ -464,7 +464,7 @@ Be conversational but maintain technical accuracy."""
             prompt=prompt,
             system_message=system_message or default_system,
             temperature=0.4,
-            max_tokens=4000
+            max_tokens=8192
         )
         
         return {
