@@ -304,12 +304,45 @@ class UnifiedDailyDoseService:
             execution_time = (datetime.utcnow() - start_time).total_seconds()
             log_progress("Complete", f"Saved {len(processed_papers)} papers in {execution_time:.1f}s")
             
+            # Build dose object for return
+            successful_papers = [p for p in processed_papers if p.get("analysis") and not p.get("error")]
+            
+            # Calculate summary statistics
+            avg_relevance = 0
+            if successful_papers:
+                scores = [p["analysis"].get("relevance_score", 5) for p in successful_papers]
+                avg_relevance = sum(scores) / len(scores)
+            
+            dose = {
+                "papers": [
+                    {
+                        "arxiv_id": p["paper"]["arxiv_id"],
+                        "title": p["paper"]["title"],
+                        "authors": p["paper"]["authors"],
+                        "abstract": p["paper"]["abstract"],
+                        "categories": p["paper"]["categories"],
+                        "published": p["paper"]["published"],
+                        "pdf_url": p["paper"]["pdf_url"],
+                        "analysis": p["analysis"],
+                        "relevance_score": p["analysis"].get("relevance_score", 5) if p["analysis"] else 0
+                    }
+                    for p in processed_papers if p.get("analysis")
+                ],
+                "summary": {
+                    "total_papers": len(processed_papers),
+                    "successful_analyses": len(successful_papers),
+                    "avg_relevance_score": round(avg_relevance, 2),
+                },
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
             return {
                 "success": True,
                 "message": "Daily dose generated successfully",
                 "papers_count": len(processed_papers),
                 "analysis_id": analysis_result.get("analysis_id"),
-                "execution_time": execution_time
+                "execution_time": execution_time,
+                "dose": dose
             }
             
         except Exception as e:
