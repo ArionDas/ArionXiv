@@ -505,11 +505,22 @@ async def run_daily_dose(current_user: dict = Depends(verify_token)):
         result = await daily_dose_service.execute_daily_dose(user_id)
         
         if result.get("success"):
+            # Build a dose object compatible with CLI expectations
+            # Prefer a full dose returned by the service if available
+            dose = result.get("dose")
+            if dose is None:
+                dose = {
+                    "papers": result.get("papers", []),
+                    "summary": result.get("summary", {}),
+                    "generated_at": result.get("generated_at"),
+                }
+            
             return {
                 "success": True,
                 "message": "Daily dose generated successfully",
                 "papers_count": result.get("papers_count", 0),
-                "dose_id": result.get("dose_id")
+                "dose_id": result.get("dose_id") or result.get("analysis_id"),
+                "dose": dose
             }
         else:
             return {

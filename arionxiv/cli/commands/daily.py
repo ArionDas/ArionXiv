@@ -92,19 +92,26 @@ async def _run_daily_dose():
             
             console.print(f"[bold {colors['primary']}]✓ Daily dose generated successfully![/bold {colors['primary']}]\n")
             
-            # Show summary
+# Show summary using actual database fields
             if summary:
-                main_summary = summary.get("main_summary", "")
-                key_themes = summary.get("key_themes", [])
+                total_papers = summary.get("total_papers", 0)
+                avg_relevance = summary.get("avg_relevance_score", 0)
+                categories = summary.get("categories_covered", [])
+                top_keywords = summary.get("top_keywords", [])
+
+                console.print(f"[bold {colors['secondary']}]Summary:[/bold {colors['secondary']}]")
+                console.print(f"  [{colors['text']}]Papers analyzed: {total_papers}[/{colors['text']}]")
+                console.print(f"  [{colors['text']}]Average relevance: {avg_relevance:.1f}/10[/{colors['text']}]\n")
+
+                if categories:
+                    console.print(f"[bold {colors['secondary']}]Categories:[/bold {colors['secondary']}]")
+                    for cat in categories[:5]:
+                        console.print(f"  • [{colors['text']}]{cat}[/{colors['text']}]")
+                    console.print()
                 
-                if main_summary:
-                    console.print(f"[bold {colors['secondary']}]Summary:[/bold {colors['secondary']}]")
-                    console.print(f"[{colors['text']}]{main_summary}[/{colors['text']}]\n")
-                
-                if key_themes:
-                    console.print(f"[bold {colors['secondary']}]Key Themes:[/bold {colors['secondary']}]")
-                    for theme in key_themes[:5]:
-                        console.print(f"  • [{colors['text']}]{theme}[/{colors['text']}]")
+                if top_keywords:
+                    console.print(f"[bold {colors['secondary']}]Top Keywords:[/bold {colors['secondary']}]")
+                    console.print(f"  [{colors['text']}]{', '.join(top_keywords[:10])}[/{colors['text']}]")
                     console.print()
             
             # Show paper count
