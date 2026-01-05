@@ -139,14 +139,17 @@ async def debug_env():
 
 @app.get("/debug/openrouter-test")
 async def debug_openrouter_test():
-    """Test OpenRouter API directly - no auth needed"""
-    import requests
-    
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    if not openrouter_key:
-        return {"error": "OPENROUTER_API_KEY not set"}
+    """Test OpenRouter API directly - ultra defensive error handling"""
+    try:
+        import requests
+    except Exception as e:
+        return {"error": f"Failed to import requests: {e}", "type": "ImportError"}
     
     try:
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+        if not openrouter_key:
+            return {"error": "OPENROUTER_API_KEY not set"}
+        
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {openrouter_key}"},
