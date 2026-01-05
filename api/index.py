@@ -137,6 +137,33 @@ async def debug_env():
         "JWT_SECRET_KEY": "set" if os.environ.get("JWT_SECRET_KEY") else "NOT SET",
     }
 
+@app.get("/debug/openrouter-test")
+async def debug_openrouter_test():
+    """Test OpenRouter API directly - no auth needed"""
+    import httpx
+    
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        return {"error": "OPENROUTER_API_KEY not set"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {openrouter_key}"},
+                json={
+                    "model": "meta-llama/llama-3.2-3b-instruct:free",
+                    "messages": [{"role": "user", "content": "Say hello"}]
+                }
+            )
+            return {
+                "status_code": resp.status_code,
+                "response_preview": resp.text[:500] if resp.text else "empty",
+                "success": resp.status_code == 200
+            }
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
 @app.get("/debug/db-test")
 async def debug_db_test():
     """Test MongoDB connection - remove after debugging"""
