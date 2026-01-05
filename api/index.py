@@ -140,27 +140,27 @@ async def debug_env():
 @app.get("/debug/openrouter-test")
 async def debug_openrouter_test():
     """Test OpenRouter API directly - no auth needed"""
-    import httpx
+    import requests
     
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if not openrouter_key:
         return {"error": "OPENROUTER_API_KEY not set"}
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {openrouter_key}"},
-                json={
-                    "model": "meta-llama/llama-3.2-3b-instruct:free",
-                    "messages": [{"role": "user", "content": "Say hello"}]
-                }
-            )
-            return {
-                "status_code": resp.status_code,
-                "response_preview": resp.text[:500] if resp.text else "empty",
-                "success": resp.status_code == 200
-            }
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {openrouter_key}"},
+            json={
+                "model": "meta-llama/llama-3.2-3b-instruct:free",
+                "messages": [{"role": "user", "content": "Say hello"}]
+            },
+            timeout=30
+        )
+        return {
+            "status_code": resp.status_code,
+            "response_preview": resp.text[:500] if resp.text else "empty",
+            "success": resp.status_code == 200
+        }
     except Exception as e:
         return {"error": str(e), "type": type(e).__name__}
 
@@ -454,8 +454,8 @@ Instructions:
 
 @app.post("/chat/message")
 async def send_chat_message(request: ChatMessageRequest, current_user: dict = Depends(verify_token)):
-    """Generate AI response using OpenRouter - simplified version"""
-    import httpx
+    """Generate AI response using OpenRouter - using requests (sync) for serverless compatibility"""
+    import requests
     
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if not openrouter_key:
@@ -467,24 +467,25 @@ async def send_chat_message(request: ChatMessageRequest, current_user: dict = De
     models = [primary_model] + FALLBACK_MODELS[:3]  # Try up to 4 models
     
     last_error = ""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for model in models:
-            try:
-                resp = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {openrouter_key}"},
-                    json={"model": model, "messages": [{"role": "user", "content": prompt}]}
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return {
-                        "success": True,
-                        "response": data["choices"][0]["message"]["content"],
-                        "model": model
-                    }
-                last_error = f"{model}: {resp.status_code} - {resp.text[:100]}"
-            except Exception as e:
-                last_error = f"{model}: {str(e)}"
+    for model in models:
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {openrouter_key}"},
+                json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+                timeout=60
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "success": True,
+                    "response": data["choices"][0]["message"]["content"],
+                    "model": model
+                }
+            last_error = f"{model}: {resp.status_code} - {resp.text[:100]}"
+        except Exception as e:
+            last_error = f"{model}: {str(e)}"
     
     raise HTTPException(500, detail=f"All models failed. Last: {last_error}")
+
 
