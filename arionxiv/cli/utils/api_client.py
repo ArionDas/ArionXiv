@@ -454,6 +454,27 @@ class ArionXivAPIClient:
         return await self._handle_response(response)
     
     # =========================================================================
+    # EMBEDDINGS CACHE ENDPOINTS
+    # =========================================================================
+    
+    async def get_embeddings(self, paper_id: str) -> Dict[str, Any]:
+        """Get cached embeddings for a paper"""
+        response = await self.httpx_client.get(
+            f"/embeddings/{paper_id}",
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
+    async def save_embeddings(self, paper_id: str, embeddings: List, chunks: List) -> Dict[str, Any]:
+        """Save embeddings for a paper"""
+        response = await self.httpx_client.post(
+            f"/embeddings/{paper_id}",
+            json={"embeddings": embeddings, "chunks": chunks},
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
+    # =========================================================================
     # HEALTH CHECK
     # =========================================================================
     

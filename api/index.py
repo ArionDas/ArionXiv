@@ -401,6 +401,24 @@ async def create_chat_session(request: ChatSessionRequest, current_user: dict = 
         error_detail = f"Failed to create session: {str(e)}. Traceback: {traceback.format_exc()}"
         raise HTTPException(status_code=500, detail=error_detail)
 
+@app.get("/chat/session/{session_id}")
+async def get_chat_session(session_id: str, current_user: dict = Depends(verify_token)):
+    """Get a specific chat session with full details"""
+    db = get_db()
+    try:
+        session = db.chat_sessions.find_one({
+            "_id": ObjectId(session_id),
+            "user_id": current_user["user_id"]
+        })
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session["session_id"] = str(session["_id"])
+        session["_id"] = str(session["_id"])
+        return {"success": True, "session": session}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Session not found: {str(e)}")
+
+
 @app.put("/chat/session/{session_id}")
 async def update_chat_session(session_id: str, messages: List[dict], current_user: dict = Depends(verify_token)):
     db = get_db()
@@ -475,6 +493,40 @@ async def update_daily_settings(request: dict, current_user: dict = Depends(veri
     return {"success": True, "message": "Daily dose settings updated"}
 
 
+# Embeddings cache endpoints - for avoiding re-processing PDFs
+@app.get("/embeddings/{paper_id}")
+async def get_embeddings(paper_id: str, current_user: dict = Depends(verify_token)):
+    """Get cached embeddings for a paper"""
+    db = get_db()
+    cached = db.paper_embeddings.find_one({
+        "paper_id": paper_id,
+        "user_id": current_user["user_id"]
+    })
+    if cached:
+        cached["_id"] = str(cached["_id"])
+        return {"success": True, "embeddings": cached.get("embeddings", []), "chunks": cached.get("chunks", [])}
+    return {"success": False, "message": "No cached embeddings found"}
+
+
+@app.post("/embeddings/{paper_id}")
+async def save_embeddings(paper_id: str, request: dict, current_user: dict = Depends(verify_token)):
+    """Save embeddings for a paper"""
+    db = get_db()
+    embeddings_data = {
+        "paper_id": paper_id,
+        "user_id": current_user["user_id"],
+        "embeddings": request.get("embeddings", []),
+        "chunks": request.get("chunks", []),
+        "updated_at": datetime.utcnow()
+    }
+    db.paper_embeddings.update_one(
+        {"paper_id": paper_id, "user_id": current_user["user_id"]},
+        {"$set": embeddings_data},
+        upsert=True
+    )
+    return {"success": True, "message": "Embeddings saved"}
+
+
 # Chat message endpoint - LLM inference via OpenRouter with fallback
 class ChatMessageRequest(BaseModel):
     message: str
@@ -483,13 +535,15 @@ class ChatMessageRequest(BaseModel):
     context: Optional[str] = None  # RAG context from client (paper chunks)
     paper_title: Optional[str] = None  # Paper title for better context
 
-# Fast models for Vercel serverless (10s timeout on Hobby plan)
-# Ordered by speed: smaller/faster models first to fit within timeout
+# Get model from environment variable, defaulting to free models
+# User can override with OPENROUTER_MODEL in .env (e.g., openai/gpt-4o-mini for paid tier)
+DEFAULT_CHAT_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.2-3b-instruct:free")
+
+# Fast free models for Vercel serverless (10s timeout) - carefully chosen from OpenRouter free tier
 FAST_MODELS = [
-    "meta-llama/llama-3.2-3b-instruct:free",    # Fastest, small model
-    "google/gemma-3-12b-it:free",               # Fast, medium model
-    "mistralai/mistral-small-3.1-24b-instruct:free",  # Medium speed
-    "google/gemma-3-27b-it:free",               # Slower but good quality
+    "qwen/qwen-2-7b-instruct:free",             # Alternative free model
+    "meta-llama/llama-3.1-8b-instruct:free",    # Fallback - larger, still free
+    "meta-llama/llama-3.2-3b-instruct:free",    # Primary - fast, free
 ]
 
 @app.post("/chat/message")
@@ -521,9 +575,9 @@ Instructions:
         # Fallback for requests without context
         prompt = f"Answer this question about a research paper concisely: {request.message}"
     
-    # Use fast models with short timeout to fit within Vercel's 10s limit
-    # Try at most 2 models to leave time for response
-    models = FAST_MODELS[:2]
+    # Use configured model first, then fallback to free models
+    # Try at most 2 models to leave time for response within Vercel's 10s limit
+    models = [DEFAULT_CHAT_MODEL] + [m for m in FAST_MODELS if m != DEFAULT_CHAT_MODEL][:1]
     
     last_error = ""
     for model in models:

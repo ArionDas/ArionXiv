@@ -4,6 +4,7 @@ Provides seamless access to all user settings with short, intuitive commands
 """
 
 import sys
+import logging
 import asyncio
 from pathlib import Path
 from datetime import datetime, time
@@ -97,7 +98,7 @@ def settings(ctx):
         arionxiv settings show         # View all settings
         arionxiv settings theme        # Change theme color
         arionxiv settings api          # Configure API keys
-        arionxiv settings prefs        # Configure paper preferences  
+        arionxiv settings preferences  # Configure paper preferences  
         arionxiv settings categories   # Set research categories
         arionxiv settings keywords     # Manage keywords
         arionxiv settings authors      # Set preferred authors
@@ -220,7 +221,7 @@ def theme_settings(color: Optional[str]):
 # PREFERENCES OVERVIEW
 # ================================
 
-@settings.command('prefs')
+@settings.command('preferences')
 @click.option('--reset', is_flag=True, help='Reset all preferences to defaults')
 def preferences_overview(reset: bool):
     """Configure paper preferences overview"""
@@ -251,10 +252,8 @@ def preferences_overview(reset: bool):
         console.print(f"\n{style_text('Quick Actions:', 'primary')}")
         actions = [
             ("categories", "Configure research categories"),
-            ("keywords", "Manage keywords & exclusions"), 
-            ("authors", "Set preferred authors"),
-            ("daily", "Daily dose settings"),
-            ("done", "Exit preferences")
+            ("keywords", "Manage keywords & exclusions"),
+            ("daily", "Daily dose settings")
         ]
         
         for cmd, desc in actions:
@@ -846,8 +845,8 @@ def papers_config():
                                 result = await api_client.remove_from_library(arxiv_id)
                                 if result.get("success"):
                                     deleted_count += 1
-                            except APIClientError:
-                                logger.error(f"Failed to remove paper from library: {e}", exc_info=True)
+                            except APIClientError as e:
+                                logging.error(f"Failed to remove paper from library: {e}", exc_info=True)
                                 console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}")
                     
                     print_success(console, f"Deleted {deleted_count} paper(s) from your library.")
