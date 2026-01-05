@@ -106,9 +106,12 @@ class UnifiedPromptService:
     
     async def get_prompts_batch(self, prompt_names: List[str]) -> Dict[str, str]:
         """
-        Get multiple prompts in a single query with caching
+        Get multiple prompts in a single query with caching.
+        Falls back to DEFAULT_PROMPTS if database is unavailable.
         Returns dict of {prompt_name: template}
         """
+        from ..prompts.prompts import DEFAULT_PROMPTS
+        
         result = {}
         to_fetch = []
         
@@ -119,6 +122,14 @@ class UnifiedPromptService:
                 result[name] = cached
             else:
                 to_fetch.append(name)
+        
+        # If no database connection, use fallback prompts
+        if unified_database_service.db is None:
+            for name in to_fetch:
+                if name in DEFAULT_PROMPTS:
+                    result[name] = DEFAULT_PROMPTS[name]
+                    self._add_to_cache(name, DEFAULT_PROMPTS[name])
+            return result
         
         # Fetch uncached prompts from database
         if to_fetch:
@@ -132,18 +143,30 @@ class UnifiedPromptService:
                     name = prompt["prompt_name"]
                     template = prompt["template"]
                     result[name] = template
-                    # Add to cache
                     self._add_to_cache(name, template)
+                
+                # For any prompts not found in DB, use fallback
+                for name in to_fetch:
+                    if name not in result and name in DEFAULT_PROMPTS:
+                        result[name] = DEFAULT_PROMPTS[name]
+                        self._add_to_cache(name, DEFAULT_PROMPTS[name])
                     
             except Exception as e:
                 logger.error(f"Failed to fetch prompts batch: {str(e)}")
+                # Fall back to DEFAULT_PROMPTS on error
+                for name in to_fetch:
+                    if name in DEFAULT_PROMPTS:
+                        result[name] = DEFAULT_PROMPTS[name]
         
         return result
     
     async def get_prompt(self, name: str) -> Dict[str, Any]:
         """
-        Get a single prompt by name with TTL caching
+        Get a single prompt by name with TTL caching.
+        Falls back to DEFAULT_PROMPTS if database is unavailable.
         """
+        from ..prompts.prompts import DEFAULT_PROMPTS
+        
         try:
             # Check cache first
             cached_template = self._get_from_cache(name)
@@ -154,6 +177,23 @@ class UnifiedPromptService:
                     "cached": True
                 }
             
+            # If no database connection, use fallback prompts
+            if unified_database_service.db is None:
+                if name in DEFAULT_PROMPTS:
+                    template = DEFAULT_PROMPTS[name]
+                    self._add_to_cache(name, template)
+                    return {
+                        "success": True,
+                        "template": template,
+                        "cached": False,
+                        "fallback": True
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Prompt '{name}' not found in defaults"
+                    }
+            
             # Query database
             prompt = await unified_database_service.find_one(
                 "prompts",
@@ -162,7 +202,6 @@ class UnifiedPromptService:
             
             if prompt:
                 template = prompt["template"]
-                # Add to cache
                 self._add_to_cache(name, template)
                 
                 return {
@@ -171,6 +210,16 @@ class UnifiedPromptService:
                     "cached": False
                 }
             else:
+                # Fall back to DEFAULT_PROMPTS if not in database
+                if name in DEFAULT_PROMPTS:
+                    template = DEFAULT_PROMPTS[name]
+                    self._add_to_cache(name, template)
+                    return {
+                        "success": True,
+                        "template": template,
+                        "cached": False,
+                        "fallback": True
+                    }
                 return {
                     "success": False,
                     "error": f"Prompt '{name}' not found"
@@ -178,6 +227,16 @@ class UnifiedPromptService:
                 
         except Exception as e:
             logger.error(f"Failed to get prompt {name}: {str(e)}")
+            # Fall back to DEFAULT_PROMPTS on error
+            if name in DEFAULT_PROMPTS:
+                template = DEFAULT_PROMPTS[name]
+                self._add_to_cache(name, template)
+                return {
+                    "success": True,
+                    "template": template,
+                    "cached": False,
+                    "fallback": True
+                }
             return {
                 "success": False,
                 "error": f"Failed to get prompt: {str(e)}"

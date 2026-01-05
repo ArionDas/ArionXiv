@@ -72,34 +72,20 @@ def daily_command(config: bool, run: bool, view: bool, dose: bool):
 
 
 async def _run_daily_dose():
-    """Generate a new daily dose by fetching fresh papers from arXiv"""
-    from ...services.unified_daily_dose_service import unified_daily_dose_service
-    from ...services.unified_user_service import unified_user_service
-    
+    """Generate a new daily dose via API"""
     colors = get_theme_colors()
     
     console.print(f"\n[bold {colors['primary']}]Generating Your Daily Dose[/bold {colors['primary']}]")
     console.rule(style=f"bold {colors['primary']}")
     
-    # Get user ID
-    user = unified_user_service.get_current_user()
-    if not user:
-        print_error(console, "Could not get current user")
-        return
-    user_id = user.get('id')
-    
     try:
-        # Progress callback for real-time updates
-        def progress_callback(step: str, detail: str = ""):
-            console.print(f"[bold {colors['primary']}]{step}[/bold {colors['primary']}] {detail}")
+        console.print(f"[bold {colors['primary']}]Fetching fresh papers from arXiv via API...[/bold {colors['primary']}]")
+        console.print(f"[dim {colors['muted']}]This may take 1-2 minutes to search and analyze papers[/dim {colors['muted']}]")
         
-        console.print(f"[bold {colors['primary']}]Fetching fresh papers from arXiv...[/bold {colors['primary']}]")
-        
-        # Run daily dose service locally - this fetches fresh papers from arXiv
-        result = await unified_daily_dose_service.execute_daily_dose(
-            user_id=user_id,
-            progress_callback=progress_callback
-        )
+        # Run daily dose via API - this runs on the server
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            task = progress.add_task(f"[bold {colors['primary']}]Generating daily dose...", total=None)
+            result = await api_client.run_daily_dose()
         
         console.rule(style=f"bold {colors['primary']}")
         
@@ -120,12 +106,21 @@ async def _run_daily_dose():
             msg = result.get("message", "Unknown error")
             print_error(console, f"Failed to generate daily dose: {msg}")
             
+    except APIClientError as e:
+        logger.error(f"Daily dose API error: {e}", exc_info=True)
+        # Check if it's a timeout - daily dose can take a while
+        if "timeout" in str(e).lower() or e.status_code == 504:
+            print_warning(console, "Daily dose generation is taking longer than expected.")
+            console.print(f"The server is still processing. Check back in a few minutes with:")
+            console.print(f"  [bold {colors['primary']}]arionxiv daily --dose[/bold {colors['primary']}]")
+        else:
+            print_error(console, f"API error: {e.message}")
     except Exception as e:
         logger.error(f"Daily dose error: {e}", exc_info=True)
         error_panel = Panel(
             f"[{colors['error']}]Error:[/{colors['error']}] {str(e)}\n\n"
             f"Failed to generate your daily dose.\n"
-            f"Please check your API keys and try again.",
+            f"Please check your connection and try again.",
             title="[bold]Daily Dose Generation Failed[/bold]",
             border_style=f"bold {colors['error']}"
         )
@@ -368,9 +363,9 @@ async def _show_daily_dashboard():
     console.rule(style=f"bold {colors['primary']}")
     
     try:
-        # Get settings from Vercel API
-        settings_result = await api_client.get_settings()
-        settings = settings_result.get("settings", {}).get("daily_dose", {}) if settings_result.get("success") else {}
+        # Get settings from Vercel API (new dedicated endpoint)
+        settings_result = await api_client.get_daily_dose_settings()
+        settings = settings_result.get("settings", {}) if settings_result.get("success") else {}
         
         # Get latest daily dose
         dose_result = await api_client.get_daily_analysis()

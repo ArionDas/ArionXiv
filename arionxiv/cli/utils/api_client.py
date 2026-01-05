@@ -430,8 +430,34 @@ class ArionXivAPIClient:
             params["date"] = date
         
         response = await self.httpx_client.get(
-            "/daily",
+            "/daily/dose",
             params=params,
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
+    async def run_daily_dose(self) -> Dict[str, Any]:
+        """Run daily dose analysis"""
+        response = await self.httpx_client.post(
+            "/daily/run",
+            headers=self._get_headers(),
+            timeout=120.0  # Longer timeout for daily dose generation
+        )
+        return await self._handle_response(response)
+    
+    async def get_daily_dose_settings(self) -> Dict[str, Any]:
+        """Get daily dose settings"""
+        response = await self.httpx_client.get(
+            "/daily/settings",
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
+    async def update_daily_dose_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Update daily dose settings"""
+        response = await self.httpx_client.put(
+            "/daily/settings",
+            json=settings,
             headers=self._get_headers()
         )
         return await self._handle_response(response)
