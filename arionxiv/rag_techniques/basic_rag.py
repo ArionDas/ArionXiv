@@ -1175,7 +1175,15 @@ class BasicRAG:
                 try:
                     from ..cli.utils.api_client import api_client
                     paper_id = session.get('arxiv_id') or session.get('paper_id')
-                    result = await api_client.send_chat_message(message=message, paper_id=paper_id, session_id=session_id)
+                    paper_title = session.get('title') or session.get('paper_title')
+                    # Pass RAG context to API for paper-aware responses
+                    result = await api_client.send_chat_message(
+                        message=message, 
+                        paper_id=paper_id, 
+                        session_id=session_id,
+                        context=context,  # Send RAG context
+                        paper_title=paper_title  # Send paper title
+                    )
                     if result.get('success'):
                         response_text = result['response']
                         model_display = result.get('model', 'ArionXiv Cloud')

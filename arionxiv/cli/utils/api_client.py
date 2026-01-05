@@ -371,16 +371,25 @@ class ArionXivAPIClient:
         self,
         message: str,
         paper_id: str,
-        session_id: str = None
+        session_id: str = None,
+        context: str = None,
+        paper_title: str = None
     ) -> Dict[str, Any]:
-        """Send a chat message"""
+        """Send a chat message with optional RAG context"""
+        payload = {
+            "message": message,
+            "paper_id": paper_id,
+            "session_id": session_id
+        }
+        # Include context if provided (for RAG-enhanced responses)
+        if context:
+            payload["context"] = context
+        if paper_title:
+            payload["paper_title"] = paper_title
+            
         response = await self.httpx_client.post(
             "/chat/message",
-            json={
-                "message": message,
-                "paper_id": paper_id,
-                "session_id": session_id
-            },
+            json=payload,
             headers=self._get_headers()
         )
         return await self._handle_response(response)

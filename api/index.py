@@ -430,6 +430,8 @@ class ChatMessageRequest(BaseModel):
     message: str
     paper_id: str
     session_id: Optional[str] = None
+    context: Optional[str] = None  # RAG context from client (paper chunks)
+    paper_title: Optional[str] = None  # Paper title for better context
 
 # Fast models for Vercel serverless (10s timeout on Hobby plan)
 # Ordered by speed: smaller/faster models first to fit within timeout
@@ -449,7 +451,25 @@ async def send_chat_message(request: ChatMessageRequest, current_user: dict = De
     if not openrouter_key:
         raise HTTPException(500, detail="Chat service not configured. Please set your own OPENROUTER_API_KEY in 'arionxiv settings api' for chat functionality.")
     
-    prompt = f"Answer this question about a research paper concisely: {request.message}"
+    # Build prompt with paper context if available
+    if request.context:
+        # Use RAG context from client - this contains relevant paper chunks
+        paper_info = f"Paper: {request.paper_title}\n\n" if request.paper_title else ""
+        prompt = f"""You are ArionXiv, an AI research assistant. Answer questions about research papers based on the provided context.
+
+{paper_info}RELEVANT SECTIONS FROM THE PAPER:
+{request.context}
+
+USER QUESTION: {request.message}
+
+Instructions:
+- Answer based ONLY on the provided paper content
+- Be specific and cite relevant details from the paper
+- If the answer is not in the context, say so clearly
+- Be concise but thorough"""
+    else:
+        # Fallback for requests without context
+        prompt = f"Answer this question about a research paper concisely: {request.message}"
     
     # Use fast models with short timeout to fit within Vercel's 10s limit
     # Try at most 2 models to leave time for response

@@ -63,6 +63,19 @@ API_KEY_INSTRUCTIONS = {
             "Note: Groq is FREE and incredibly fast!",
             "      Optional - use for local LLM inference."
         ]
+    },
+    "openrouter": {
+        "title": "How to Get Your OpenRouter API Key (FREE models available)",
+        "steps": [
+            "1. Go to: https://openrouter.ai/keys",
+            "2. Create a free account or sign in with Google/GitHub",
+            "3. Click 'Create Key'",
+            "4. Copy your API key (starts with sk-or-)",
+            "",
+            "Note: OpenRouter provides FREE access to many LLMs!",
+            "      Recommended for paper chat feature.",
+            "      Free models: Llama 3.3, Gemma, Qwen, and more."
+        ]
     }
 }
 
@@ -96,6 +109,13 @@ class APIConfigManager:
             "env_var": "GROQ_API_KEY",
             "description": "Optional - for local LLM inference (hosted API is used by default)",
             "url": "https://console.groq.com/keys",
+            "required": False
+        },
+        "openrouter": {
+            "name": "OpenRouter",
+            "env_var": "OPENROUTER_API_KEY",
+            "description": "For paper chat - access FREE LLMs (Llama, Gemma, Qwen)",
+            "url": "https://openrouter.ai/keys",
             "required": False
         }
     }
