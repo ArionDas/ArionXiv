@@ -1185,9 +1185,19 @@ class BasicRAG:
                 except Exception as e:
                     # Extract meaningful error message from APIClientError
                     if hasattr(e, 'message') and e.message:
-                        error_msg = f"Chat unavailable: {e.message}"
+                        # Clean up the error message for user display
+                        msg = e.message
+                        if "serverless timeout" in msg.lower():
+                            error_msg = "Chat service timeout. For reliable chat, run 'arionxiv settings api' to set your own OPENROUTER_API_KEY."
+                        elif "503" in str(getattr(e, 'status_code', '')) or "unavailable" in msg.lower():
+                            error_msg = "Chat service temporarily unavailable. Set your OPENROUTER_API_KEY via 'arionxiv settings api' for uninterrupted chat."
+                        else:
+                            error_msg = f"Chat unavailable: {msg}"
                     elif hasattr(e, 'status_code') and e.status_code:
-                        error_msg = f"Chat unavailable: API error {e.status_code}"
+                        if e.status_code == 503:
+                            error_msg = "Chat service temporarily unavailable. For reliable chat, set your OPENROUTER_API_KEY via 'arionxiv settings api'."
+                        else:
+                            error_msg = f"Chat unavailable: API error {e.status_code}"
                     else:
                         error_msg = f"Chat unavailable: {str(e) or 'Unknown error'}"
                     logger.debug(f"Hosted API error: {e}")

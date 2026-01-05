@@ -431,64 +431,68 @@ class ChatMessageRequest(BaseModel):
     paper_id: str
     session_id: Optional[str] = None
 
-# Fallback models (same as CLI openrouter_client.py)
-FALLBACK_MODELS = [
-    "google/gemma-3-27b-it:free",
-    "google/gemma-3-12b-it:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
-    "moonshotai/kimi-k2:free",
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
+# Fast models for Vercel serverless (10s timeout on Hobby plan)
+# Ordered by speed: smaller/faster models first to fit within timeout
+FAST_MODELS = [
+    "meta-llama/llama-3.2-3b-instruct:free",    # Fastest, small model
+    "google/gemma-3-12b-it:free",               # Fast, medium model
+    "mistralai/mistral-small-3.1-24b-instruct:free",  # Medium speed
+    "google/gemma-3-27b-it:free",               # Slower but good quality
 ]
-
-# RAG Chat prompt template (same as prompts/prompts.py)
-RAG_CHAT_PROMPT = """You are an AI research assistant helping users understand research papers. Your role is to provide accurate, helpful answers based on the paper content.
-
-CONVERSATION HISTORY:
-{history}
-
-USER QUESTION: {message}
-
-Instructions:
-- Provide comprehensive, detailed answers
-- If you don't know, say so clearly
-- Be conversational but maintain technical accuracy
-- Structure longer answers with clear sections"""
 
 @app.post("/chat/message")
 async def send_chat_message(request: ChatMessageRequest, current_user: dict = Depends(verify_token)):
-    """Generate AI response using OpenRouter - using requests (sync) for serverless compatibility"""
+    """Generate AI response using OpenRouter - optimized for Vercel serverless (10s limit)"""
     import requests
     
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if not openrouter_key:
-        raise HTTPException(500, detail="OPENROUTER_API_KEY not configured")
+        raise HTTPException(500, detail="Chat service not configured. Please set your own OPENROUTER_API_KEY in 'arionxiv settings api' for chat functionality.")
     
-    prompt = f"Answer this question about a research paper: {request.message}"
+    prompt = f"Answer this question about a research paper concisely: {request.message}"
     
-    primary_model = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-    models = [primary_model] + FALLBACK_MODELS[:3]  # Try up to 4 models
+    # Use fast models with short timeout to fit within Vercel's 10s limit
+    # Try at most 2 models to leave time for response
+    models = FAST_MODELS[:2]
     
     last_error = ""
     for model in models:
         try:
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {openrouter_key}"},
-                json={"model": model, "messages": [{"role": "user", "content": prompt}]},
-                timeout=60
+                headers={
+                    "Authorization": f"Bearer {openrouter_key}",
+                    "HTTP-Referer": "https://github.com/ArionDas/ArionXiv",
+                    "X-Title": "ArionXiv"
+                },
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 500,  # Limit response size for speed
+                },
+                timeout=7  # 7s timeout to fit within Vercel's 10s limit
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return {
-                    "success": True,
-                    "response": data["choices"][0]["message"]["content"],
-                    "model": model
-                }
-            last_error = f"{model}: {resp.status_code} - {resp.text[:100]}"
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if content:
+                    return {
+                        "success": True,
+                        "response": content,
+                        "model": model.split("/")[-1].replace(":free", "")
+                    }
+                last_error = f"{model}: Empty response"
+            else:
+                last_error = f"{model}: {resp.status_code}"
+        except requests.exceptions.Timeout:
+            last_error = f"{model}: Timeout"
         except Exception as e:
-            last_error = f"{model}: {str(e)}"
+            last_error = f"{model}: {str(e)[:50]}"
     
-    raise HTTPException(500, detail=f"All models failed. Last: {last_error}")
+    # User-friendly error with guidance
+    raise HTTPException(
+        503,
+        detail=f"Chat service temporarily unavailable (serverless timeout). For reliable chat, set your own OPENROUTER_API_KEY via 'arionxiv settings api'. Error: {last_error}"
+    )
 
 
