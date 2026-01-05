@@ -72,7 +72,7 @@ def daily_command(config: bool, run: bool, view: bool, dose: bool):
 
 
 async def _run_daily_dose():
-    """Run daily dose generation locally (not via API to avoid Vercel timeouts)"""
+    """Run daily dose generation locally (API has timeout limits)"""
     from ...services.unified_daily_dose_service import daily_dose_service
     
     colors = get_theme_colors()
