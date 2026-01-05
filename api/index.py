@@ -510,14 +510,15 @@ async def get_embeddings(paper_id: str, current_user: dict = Depends(verify_toke
 
 @app.post("/embeddings/{paper_id}")
 async def save_embeddings(paper_id: str, request: dict, current_user: dict = Depends(verify_token)):
-    """Save embeddings for a paper"""
+    """Save embeddings for a paper with 24-hour TTL"""
     db = get_db()
     embeddings_data = {
         "paper_id": paper_id,
         "user_id": current_user["user_id"],
         "embeddings": request.get("embeddings", []),
         "chunks": request.get("chunks", []),
-        "updated_at": datetime.utcnow()
+        "updated_at": datetime.utcnow(),
+        "expires_at": datetime.utcnow() + timedelta(hours=24)  # 24-hour TTL
     }
     db.paper_embeddings.update_one(
         {"paper_id": paper_id, "user_id": current_user["user_id"]},

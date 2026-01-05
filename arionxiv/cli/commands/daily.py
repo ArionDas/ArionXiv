@@ -80,7 +80,7 @@ async def _run_daily_dose():
     
     # Get user's settings to show their scheduled time
     try:
-        settings_result = await api_client.get_daily_settings()
+        settings_result = await api_client.get_daily_dose_settings()
         
         if settings_result.get("success"):
             settings = settings_result.get("settings", {})
