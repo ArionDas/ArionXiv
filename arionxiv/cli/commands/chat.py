@@ -436,7 +436,7 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
                 "embeddings": result.get("embeddings", []),
                 "chunks": result.get("chunks", [])
             }
-            logger.debug(f"Found {len(cached_data['embeddings'])} cached embeddings via API")
+            logger.info(f"Found {len(cached_data['embeddings'])} cached embeddings for paper {paper_id}")
     except Exception as e:
         logger.debug(f"No cached embeddings found via API: {e}")
         cached_data = None

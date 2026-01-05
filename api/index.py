@@ -127,6 +127,7 @@ async def root():
 async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
+
 @app.get("/debug/env")
 async def debug_env():
     """Debug endpoint to check if env vars are configured (returns only presence, not values)"""

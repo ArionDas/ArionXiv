@@ -72,65 +72,65 @@ def daily_command(config: bool, run: bool, view: bool, dose: bool):
 
 
 async def _run_daily_dose():
-    """Run daily dose generation via API"""
+    """Run daily dose generation locally (API has timeout limits)"""
+    from ...services.unified_daily_dose_service import daily_dose_service
+    
     colors = get_theme_colors()
     
     console.print(f"\n[bold {colors['primary']}]Running Daily Dose Generation[/bold {colors['primary']}]")
     console.rule(style=f"bold {colors['primary']}")
     
     try:
-        console.print(f"\n[{colors['muted']}]Fetching papers and generating personalized summary...[/{colors['muted']}]")
-        console.print(f"[{colors['muted']}]This may take a moment.[/{colors['muted']}]\n")
+        # Get user_id from local session
+        current_user = unified_user_service.get_current_user()
+        if not current_user:
+            print_error(console, "You must be logged in to run daily dose. Use 'arionxiv login' first.")
+            return
         
-        result = await api_client.run_daily_dose()
+        user_id = current_user.get("id") or current_user.get("user_id")
+        if not user_id:
+            print_error(console, "Could not determine user ID. Please login again.")
+            return
+        
+        console.print(f"\n[{colors['muted']}]Fetching papers and generating personalized summary...[/{colors['muted']}]")
+        console.print(f"[{colors['muted']}]This runs locally - no timeout limits![/{colors['muted']}]\n")
+        
+        # Progress callback for real-time updates
+        def progress_callback(step: str, detail: str = ""):
+            if detail:
+                console.print(f"  [{colors['secondary']}]• {step}:[/{colors['secondary']}] [white]{detail}[/white]")
+            else:
+                console.print(f"  [{colors['secondary']}]• {step}[/{colors['secondary']}]")
+        
+        # Execute locally with progress
+        result = await daily_dose_service.execute_daily_dose(user_id, progress_callback=progress_callback)
         
         if result.get("success"):
-            daily_dose = result.get("dose", {})
-            papers = daily_dose.get("papers", [])
-            summary = daily_dose.get("summary", {})
-            generated_at = daily_dose.get("generated_at")
+            dose = result.get("dose", {})
+            papers = dose.get("papers", [])
+            summary = dose.get("summary", {})
             
-            console.print(f"[bold {colors['primary']}]✓ Daily dose generated successfully![/bold {colors['primary']}]\n")
+            console.print(f"\n[bold {colors['primary']}]✓ Daily dose generated successfully![/bold {colors['primary']}]\n")
             
-# Show summary using actual database fields
+            # Show summary
             if summary:
                 total_papers = summary.get("total_papers", 0)
                 avg_relevance = summary.get("avg_relevance_score", 0)
-                categories = summary.get("categories_covered", [])
-                top_keywords = summary.get("top_keywords", [])
-
-                console.print(f"[bold {colors['secondary']}]Summary:[/bold {colors['secondary']}]")
-                console.print(f"  [{colors['text']}]Papers analyzed: {total_papers}[/{colors['text']}]")
-                console.print(f"  [{colors['text']}]Average relevance: {avg_relevance:.1f}/10[/{colors['text']}]\n")
-
-                if categories:
-                    console.print(f"[bold {colors['secondary']}]Categories:[/bold {colors['secondary']}]")
-                    for cat in categories[:5]:
-                        console.print(f"  • [{colors['text']}]{cat}[/{colors['text']}]")
-                    console.print()
                 
-                if top_keywords:
-                    console.print(f"[bold {colors['secondary']}]Top Keywords:[/bold {colors['secondary']}]")
-                    console.print(f"  [{colors['text']}]{', '.join(top_keywords[:10])}[/{colors['text']}]")
-                    console.print()
+                console.print(f"[bold {colors['secondary']}]Summary:[/bold {colors['secondary']}]")
+                console.print(f"  [white]Papers analyzed: {total_papers}[/white]")
+                console.print(f"  [white]Average relevance: {avg_relevance:.1f}/10[/white]\n")
             
             # Show paper count
             if papers:
                 console.print(f"[bold {colors['secondary']}]Papers found:[/bold {colors['secondary']}] {len(papers)}")
             
-            # Show generation time
-            if generated_at:
-                console.print(f"[bold {colors['secondary']}]Generated at:[/bold {colors['secondary']}] {generated_at}")
-            
             console.print(f"\n[{colors['muted']}]View full details with:[/{colors['muted']}]")
             console.print(f"  [bold {colors['primary']}]arionxiv daily --dose[/bold {colors['primary']}]")
         else:
-            msg = result.get("message", "Unknown error")
+            msg = result.get("message", result.get("error", "Unknown error"))
             print_error(console, f"Failed to generate daily dose: {msg}")
             
-    except APIClientError as e:
-        logger.error(f"Daily dose run API error: {e}", exc_info=True)
-        print_error(console, f"API error: {e.message}")
     except Exception as e:
         logger.error(f"Daily dose run error: {e}", exc_info=True)
         print_error(console, str(e))
