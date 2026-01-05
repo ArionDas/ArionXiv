@@ -425,6 +425,56 @@ async def get_daily_analysis(current_user: dict = Depends(verify_token)):
     return {"success": True, "dose": dose}
 
 
+@app.get("/daily/settings")
+async def get_daily_settings(current_user: dict = Depends(verify_token)):
+    """Get user's daily dose settings"""
+    db = get_db()
+    user = db.users.find_one({"_id": ObjectId(current_user["user_id"])})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    preferences = user.get("preferences", {})
+    daily_dose = preferences.get("daily_dose", {})
+    
+    return {
+        "success": True,
+        "settings": {
+            "enabled": daily_dose.get("enabled", False),
+            "scheduled_time": daily_dose.get("scheduled_time"),
+            "keywords": daily_dose.get("keywords", preferences.get("keywords", [])),
+            "max_papers": daily_dose.get("max_papers", 5),
+            "categories": preferences.get("categories", ["cs.AI", "cs.LG"])
+        }
+    }
+
+
+@app.put("/daily/settings")
+async def update_daily_settings(request: dict, current_user: dict = Depends(verify_token)):
+    """Update user's daily dose settings"""
+    db = get_db()
+    
+    # Build update dict
+    updates = {}
+    if "enabled" in request:
+        updates["preferences.daily_dose.enabled"] = request["enabled"]
+    if "scheduled_time" in request:
+        updates["preferences.daily_dose.scheduled_time"] = request["scheduled_time"]
+    if "keywords" in request:
+        updates["preferences.daily_dose.keywords"] = request["keywords"]
+        updates["preferences.keywords"] = request["keywords"]  # Also update main keywords
+    if "max_papers" in request:
+        updates["preferences.daily_dose.max_papers"] = min(request["max_papers"], 10)
+    
+    if updates:
+        updates["preferences.daily_dose.updated_at"] = datetime.utcnow()
+        db.users.update_one(
+            {"_id": ObjectId(current_user["user_id"])},
+            {"$set": updates}
+        )
+    
+    return {"success": True, "message": "Daily dose settings updated"}
+
+
 # Chat message endpoint - LLM inference via OpenRouter with fallback
 class ChatMessageRequest(BaseModel):
     message: str

@@ -420,28 +420,19 @@ class ArionXivAPIClient:
         return await self._handle_response(response)
     
     # =========================================================================
-    # ANALYSIS ENDPOINTS
+    # DAILY DOSE ENDPOINTS
     # =========================================================================
     
     async def get_daily_analysis(self, date: str = None) -> Dict[str, Any]:
-        """Get daily analysis"""
+        """Get daily analysis for today or specified date"""
         params = {}
         if date:
             params["date"] = date
         
         response = await self.httpx_client.get(
-            "/daily/dose",
+            "/daily",
             params=params,
             headers=self._get_headers()
-        )
-        return await self._handle_response(response)
-    
-    async def run_daily_dose(self) -> Dict[str, Any]:
-        """Run daily dose analysis"""
-        response = await self.httpx_client.post(
-            "/daily/run",
-            headers=self._get_headers(),
-            timeout=120.0  # Longer timeout for daily dose generation
         )
         return await self._handle_response(response)
     
@@ -458,14 +449,6 @@ class ArionXivAPIClient:
         response = await self.httpx_client.put(
             "/daily/settings",
             json=settings,
-            headers=self._get_headers()
-        )
-        return await self._handle_response(response)
-    
-    async def trigger_daily_analysis(self) -> Dict[str, Any]:
-        """Trigger daily analysis"""
-        response = await self.httpx_client.post(
-            "/analysis/daily/trigger",
             headers=self._get_headers()
         )
         return await self._handle_response(response)
