@@ -1,10 +1,16 @@
 [project]
 name = "arionxiv-api"
 version = "1.0.0"
-requires-python = ">=3.9"
+description = "ArionXiv Serverless API"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",
     "pymongo>=4.8.0",
     "pyjwt>=2.9.0",
     "python-dotenv>=1.0.0",
+    "requests>=2.28.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
