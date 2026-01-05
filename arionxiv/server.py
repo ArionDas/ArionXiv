@@ -863,6 +863,99 @@ async def get_daily_analysis(
         logger.error(f"Failed to get daily analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve analysis")
 
+
+@app.get("/daily/dose")
+async def get_daily_dose(current_user: Dict = Depends(verify_token)):
+    """Get user's latest daily dose"""
+    try:
+        user_id = current_user.get("id") or current_user.get("user_id") or str(current_user.get("_id", ""))
+        
+        # Get the latest daily dose from the database
+        daily_dose = await unified_database_service.find_one(
+            "daily_dose",
+            {"user_id": user_id},
+            sort=[("generated_at", -1)]
+        )
+        
+        if not daily_dose:
+            return {
+                "success": False,
+                "message": "No daily dose found. Generate one first.",
+                "dose": None
+            }
+        
+        # Convert ObjectId to string
+        if "_id" in daily_dose:
+            daily_dose["_id"] = str(daily_dose["_id"])
+        
+        return {
+            "success": True,
+            "dose": daily_dose
+        }
+    except Exception as e:
+        logger.error(f"Failed to get daily dose: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve daily dose")
+
+
+@app.post("/daily/run")
+async def run_daily_dose(current_user: Dict = Depends(verify_token)):
+    """Run daily dose analysis for the user"""
+    try:
+        from .services.unified_daily_dose_service import unified_daily_dose_service
+        
+        user_id = current_user.get("id") or current_user.get("user_id") or str(current_user.get("_id", ""))
+        
+        logger.info(f"Running daily dose for user {user_id}")
+        
+        result = await unified_daily_dose_service.execute_daily_dose(user_id=user_id)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Failed to run daily dose: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to run daily dose")
+
+
+@app.get("/daily/settings")
+async def get_daily_dose_settings(current_user: Dict = Depends(verify_token)):
+    """Get user's daily dose settings"""
+    try:
+        from .services.unified_daily_dose_service import unified_daily_dose_service
+        
+        user_id = current_user.get("id") or current_user.get("user_id") or str(current_user.get("_id", ""))
+        
+        result = await unified_daily_dose_service.get_user_daily_dose_settings(user_id)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Failed to get daily dose settings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve settings")
+
+
+@app.put("/daily/settings")
+async def update_daily_dose_settings(
+    settings: Dict[str, Any],
+    current_user: Dict = Depends(verify_token)
+):
+    """Update user's daily dose settings"""
+    try:
+        from .services.unified_daily_dose_service import unified_daily_dose_service
+        
+        user_id = current_user.get("id") or current_user.get("user_id") or str(current_user.get("_id", ""))
+        
+        result = await unified_daily_dose_service.update_user_daily_dose_settings(
+            user_id=user_id,
+            keywords=settings.get("keywords"),
+            max_papers=settings.get("max_papers"),
+            scheduled_time=settings.get("scheduled_time"),
+            enabled=settings.get("enabled")
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"Failed to update daily dose settings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update settings")
+
+
 @app.post("/analysis/daily/trigger")
 async def trigger_daily_analysis(current_user: Dict = Depends(verify_token)):
     """Manually trigger daily analysis"""

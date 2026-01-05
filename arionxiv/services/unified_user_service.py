@@ -238,15 +238,27 @@ class UnifiedUserService:
             }
     
     async def update_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Update user preferences"""
+        """Update user preferences - tries API first, then local DB"""
         try:
-            # Check if database is available
+            # Try API first for hosted users (no local MongoDB)
+            try:
+                from ..cli.utils.api_client import api_client
+                if api_client.is_authenticated():
+                    # Flatten preferences for API
+                    settings_to_update = preferences.get("preferences", preferences)
+                    result = await api_client.update_settings(settings_to_update)
+                    if result.get("success"):
+                        return {"success": True, "message": "Preferences updated via API"}
+            except Exception as api_err:
+                logger.debug(f"API preferences update failed, trying local DB: {api_err}")
+            
+            # Fall back to local database
             if unified_database_service.db is None:
                 logger.warning("Database not available for updating preferences")
-                return {"success": True, "message": "Preferences updated (offline mode)"}
+                return {"success": True, "message": "Preferences updated (offline mode - may not persist)"}
             
             update_data = {
-                "preferences": preferences,
+                "preferences": preferences.get("preferences", preferences),
                 "updated_at": datetime.utcnow()
             }
             
@@ -600,13 +612,36 @@ class UnifiedUserService:
     # ====================
     
     async def get_user_preferences(self, user_id: str) -> Dict[str, Any]:
-        """Get user's paper preferences"""
+        """Get user's paper preferences - tries API first, then local DB"""
         try:
-            # Ensure database is connected
-            if unified_database_service.db is None:
-                await unified_database_service.connect_mongodb()
+            # Try API first for hosted users (no local MongoDB)
+            try:
+                from ..cli.utils.api_client import api_client
+                if api_client.is_authenticated():
+                    result = await api_client.get_settings()
+                    if result.get("success"):
+                        settings = result.get("settings", {})
+                        return {
+                            "success": True,
+                            "preferences": {
+                                "categories": settings.get("categories", ["cs.AI", "cs.LG", "cs.CV"]),
+                                "keywords": settings.get("keywords", []),
+                                "authors": settings.get("authors", []),
+                                "exclude_keywords": settings.get("exclude_keywords", []),
+                                "min_relevance_score": settings.get("min_relevance_score", 0.2),
+                                "max_papers_per_day": settings.get("max_papers_per_day", 10),
+                                "daily_dose": settings.get("daily_dose", {})
+                            }
+                        }
+            except Exception as api_err:
+                logger.debug(f"API preferences fetch failed, trying local DB: {api_err}")
             
-            # Get user and their preferences
+            # Fall back to local database
+            if unified_database_service.db is None:
+                # Return defaults if no DB and API failed
+                return {"success": True, "preferences": self._get_default_preferences()}
+            
+            # Get user and their preferences from local DB
             user_result = await self.get_user_by_id(user_id)
             if user_result["success"]:
                 user = user_result["user"]
@@ -629,7 +664,7 @@ class UnifiedUserService:
                 
         except Exception as e:
             logger.error("Failed to get user preferences", error=str(e))
-            return {"success": False, "message": str(e)}
+            return {"success": True, "preferences": self._get_default_preferences()}
     
     async def save_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
         """Save user's paper preferences"""
