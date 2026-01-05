@@ -63,7 +63,7 @@ class UnifiedDailyDoseService:
     
     async def get_user_daily_dose_settings(self, user_id: str) -> Dict[str, Any]:
         """
-        Get user's daily dose settings from the database.
+        Get user's daily dose settings from the database or API.
         
         Returns settings including:
         - keywords: List of search keywords
@@ -72,10 +72,41 @@ class UnifiedDailyDoseService:
         - enabled: Whether daily dose is enabled
         """
         try:
-            if unified_database_service.db is None:
-                await unified_database_service.connect_mongodb()
+            # Try API first for hosted users (no local MongoDB)
+            try:
+                from ..cli.utils.api_client import api_client
+                if api_client.is_authenticated():
+                    result = await api_client.get_settings()
+                    if result.get("success"):
+                        settings = result.get("settings", {})
+                        daily_dose = settings.get("daily_dose", {})
+                        preferences = settings.get("preferences", {})
+                        return {
+                            "success": True,
+                            "settings": {
+                                "keywords": daily_dose.get("keywords", preferences.get("keywords", [])),
+                                "max_papers": min(daily_dose.get("max_papers", 5), self.max_papers),
+                                "scheduled_time": daily_dose.get("scheduled_time", None),
+                                "enabled": daily_dose.get("enabled", False),
+                                "categories": preferences.get("categories", ["cs.AI", "cs.LG"])
+                            }
+                        }
+            except Exception as api_err:
+                logger.debug(f"API settings fetch failed, trying local DB: {api_err}")
             
-            # Get user preferences
+            # Fall back to local MongoDB
+            if unified_database_service.db is None:
+                try:
+                    await unified_database_service.connect_mongodb()
+                except Exception as db_err:
+                    logger.debug(f"Local MongoDB not available: {db_err}")
+                    return {
+                        "success": False,
+                        "message": "No database connection available. Please ensure you're logged in.",
+                        "settings": self._get_default_settings()
+                    }
+            
+            # Get user preferences from local DB
             user = await unified_database_service.find_one("users", {"_id": user_id})
             if not user:
                 # Try alternate lookup

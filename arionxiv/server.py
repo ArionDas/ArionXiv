@@ -728,6 +728,59 @@ async def get_chat_session(
         raise HTTPException(status_code=500, detail="Failed to get session")
 
 
+@app.put("/chat/session/{session_id}")
+async def update_chat_session(
+    session_id: str,
+    messages: List[Dict[str, Any]],
+    current_user: Dict = Depends(verify_token)
+):
+    """Update chat session with new messages"""
+    try:
+        user_name = current_user.get("user_name") or current_user.get("email", "").split("@")[0]
+        
+        from bson import ObjectId
+        # Verify session belongs to user
+        session = await unified_database_service.find_one(
+            "chat_sessions",
+            {"_id": ObjectId(session_id), "user_name": user_name}
+        )
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Update messages and last_activity
+        result = await unified_database_service.update_one(
+            "chat_sessions",
+            {"_id": ObjectId(session_id)},
+            {
+                "$set": {
+                    "messages": messages,
+                    "last_activity": datetime.utcnow()
+                }
+            }
+        )
+        
+        if result and getattr(result, 'modified_count', 0) > 0:
+            return {
+                "success": True,
+                "message": "Session updated",
+                "message_count": len(messages)
+            }
+        
+        # Even if no modification (same data), return success
+        return {
+            "success": True,
+            "message": "Session update processed",
+            "message_count": len(messages)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update chat session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update session")
+
+
 @app.delete("/chat/session/{session_id}")
 async def delete_chat_session(
     session_id: str,

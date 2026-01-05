@@ -341,7 +341,8 @@ async def _display_sessions_table_animated(console: Console, colors: Dict, sessi
         
         for i in range(num_rows):
             session = sessions[i]
-            title = session.get("paper_title", "Unknown Paper")
+            # Handle both API field names (title) and legacy field names (paper_title)
+            title = session.get("title", session.get("paper_title", "Unknown Paper"))
             if len(title) > 45:
                 title = title[:42] + "..."
             
@@ -380,6 +381,45 @@ async def _display_sessions_table_animated(console: Console, colors: Dict, sessi
 
 async def _continue_chat_session(console: Console, colors: Dict, user_name: str, session: Dict[str, Any]):
     """Continue an existing chat session"""
+    
+    # The session from get_chat_sessions is a summary - fetch full session with messages
+    api_session_id = session.get('session_id', '')
+    if api_session_id:
+        try:
+            full_session_result = await api_client.get_chat_session(api_session_id)
+            if full_session_result.get('success') and full_session_result.get('session'):
+                full_session = full_session_result['session']
+                # Map API fields to expected fields and preserve api_session_id
+                session = {
+                    'session_id': full_session.get('session_id', api_session_id),
+                    'api_session_id': api_session_id,  # Store for saving messages back to API
+                    'paper_id': full_session.get('arxiv_id', session.get('arxiv_id', '')),
+                    'paper_title': full_session.get('title', session.get('title', 'Unknown Paper')),
+                    'messages': full_session.get('messages', []),
+                    'last_activity': full_session.get('last_activity'),
+                    'created_at': full_session.get('created_at')
+                }
+                logger.debug(f"Loaded full session with {len(session.get('messages', []))} messages")
+        except Exception as e:
+            logger.warning(f"Failed to fetch full session details: {e}")
+            # Fall back to summary session data with field mapping
+            session = {
+                'session_id': api_session_id,
+                'api_session_id': api_session_id,
+                'paper_id': session.get('arxiv_id', session.get('paper_id', '')),
+                'paper_title': session.get('title', session.get('paper_title', 'Unknown Paper')),
+                'messages': session.get('messages', []),
+                'last_activity': session.get('last_activity'),
+            }
+    else:
+        # Map field names for consistency
+        session = {
+            'session_id': session.get('session_id', ''),
+            'paper_id': session.get('arxiv_id', session.get('paper_id', '')),
+            'paper_title': session.get('title', session.get('paper_title', 'Unknown Paper')),
+            'messages': session.get('messages', []),
+            'last_activity': session.get('last_activity'),
+        }
     
     paper_id = session.get('paper_id', '')
     paper_title = session.get('paper_title', 'Unknown Paper')

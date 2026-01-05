@@ -137,11 +137,18 @@ class OpenRouterClient:
     
     @property
     def api_key(self):
-        """Lazy load API key"""
-        if not self._api_key_checked:
+        """Lazy load API key - re-checks if not found previously"""
+        # Always re-check if key was not found, in case it was loaded later
+        if not self._api_key_checked or self._api_key is None:
             self._api_key = os.getenv("OPENROUTER_API_KEY")
             self._api_key_checked = True
         return self._api_key
+    
+    def refresh_api_key(self):
+        """Force refresh the API key from environment"""
+        self._api_key = os.getenv("OPENROUTER_API_KEY")
+        self._api_key_checked = True
+        return self._api_key is not None
     
     @property
     def is_available(self) -> bool:
