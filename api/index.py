@@ -41,15 +41,36 @@ security = HTTPBearer(auto_error=False)
 # MongoDB connection (lazy)
 _client = None
 _db = None
+_indexes_initialized = False
 
 def get_db():
-    global _client, _db
+    global _client, _db, _indexes_initialized
     if _db is None:
         uri = os.environ.get("MONGODB_URI")
         if not uri:
             raise HTTPException(500, "Database not configured")
         _client = MongoClient(uri)
         _db = _client[os.environ.get("DATABASE_NAME", "arionxiv")]
+    
+    # Ensure indexes are correct (one-time check per cold start)
+    if not _indexes_initialized:
+        try:
+            # Drop old chunk_id index on paper_embeddings if it exists
+            # This index was from the old non-batched storage format
+            existing_indexes = _db.paper_embeddings.index_information()
+            if 'chunk_id_1' in existing_indexes:
+                logger.info("Dropping deprecated chunk_id_1 index from paper_embeddings")
+                _db.paper_embeddings.drop_index('chunk_id_1')
+            
+            # Ensure proper indexes for batched storage
+            _db.paper_embeddings.create_index([("paper_id", 1), ("user_id", 1), ("batch_index", 1)])
+            _db.paper_embeddings.create_index([("expires_at", 1)], expireAfterSeconds=0)  # TTL index
+            
+            _indexes_initialized = True
+        except Exception as e:
+            logger.warning(f"Index management warning: {e}")
+            _indexes_initialized = True  # Don't retry on every request
+    
     return _db
 
 # JWT helpers
@@ -126,6 +147,7 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
 
 @app.get("/debug/env")
 async def debug_env():

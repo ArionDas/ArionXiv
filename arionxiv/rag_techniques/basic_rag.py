@@ -790,11 +790,11 @@ class BasicRAG:
                 api_result = await api_client.save_embeddings(doc_id, embeddings, chunks)
                 if api_result.get("success"):
                     batches = api_result.get("message", "")
-                    logger.info(f"✓ Saved {len(embeddings)} embeddings to cloud cache: {batches}")
+                    logger.info(f"✓ Saved {len(embeddings)} embeddings to cloud cache for {doc_id}: {batches}")
                     api_saved = True
                 else:
                     error_msg = api_result.get("message", "Unknown error")
-                    logger.debug(f"Cloud cache not available: {error_msg}")
+                    logger.warning(f"Cloud cache save failed for {doc_id}: {error_msg}")
             except Exception as api_err:
                 # Silently fall back to local cache - this is expected when offline or API unavailable
                 logger.debug(f"Using local cache only: {api_err}")
