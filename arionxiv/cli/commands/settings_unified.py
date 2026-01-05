@@ -574,18 +574,22 @@ def _interactive_api_config(colors: Dict[str, str]):
         gemini_status = "configured" if status["gemini"]["configured"] else "not set"
         hf_status = "configured" if status["huggingface"]["configured"] else "not set"
         groq_status = "configured" if status["groq"]["configured"] else "not set"
+        openrouter_status = "configured" if status["openrouter"]["configured"] else "not set"
+        openrouter_model_status = "configured" if status["openrouter_model"]["configured"] else "not set"
         
         left_to_right_reveal(console, "\nOptions:", style=f"bold {colors['primary']}", duration=0.5)
         left_to_right_reveal(console, f"1. Configure Gemini API key (current: {gemini_status})", style=colors['primary'], duration=0.3)
         left_to_right_reveal(console, f"2. Configure HuggingFace API key (current: {hf_status})", style=colors['primary'], duration=0.3)
         left_to_right_reveal(console, f"3. Configure Groq API key (current: {groq_status})", style=colors['primary'], duration=0.3)
-        left_to_right_reveal(console, f"4. Show API status", style=colors['primary'], duration=0.3)
-        left_to_right_reveal(console, f"5. Done - Return to main menu", style=colors['primary'], duration=0.3)
+        left_to_right_reveal(console, f"4. Configure OpenRouter API key (current: {openrouter_status})", style=colors['primary'], duration=0.3)
+        left_to_right_reveal(console, f"5. Configure OpenRouter Model (current: {openrouter_model_status})", style=colors['primary'], duration=0.3)
+        left_to_right_reveal(console, f"6. Show API status", style=colors['primary'], duration=0.3)
+        left_to_right_reveal(console, f"7. Done - Return to main menu", style=colors['primary'], duration=0.3)
         
         choice = Prompt.ask(
             f"[bold {colors['primary']}]Select option[/bold {colors['primary']}]",
-            choices=["1", "2", "3", "4", "5"],
-            default="5"
+            choices=["1", "2", "3", "4", "5", "6", "7"],
+            default="7"
         )
         
         if choice == "1":
@@ -595,8 +599,12 @@ def _interactive_api_config(colors: Dict[str, str]):
         elif choice == "3":
             _configure_api_key_interactive("groq", colors)
         elif choice == "4":
-            show_api_status(console)
+            _configure_api_key_interactive("openrouter", colors)
         elif choice == "5":
+            _configure_api_key_interactive("openrouter_model", colors)
+        elif choice == "6":
+            show_api_status(console)
+        elif choice == "7":
             show_command_suggestions(console, context='settings')
             break
 
@@ -639,6 +647,36 @@ API_KEY_INSTRUCTIONS = {
             "",
             "Note: Groq is FREE and incredibly fast!",
             "      It's REQUIRED for AI analysis and chat features."
+        ]
+    },
+    "openrouter": {
+        "title": "How to Get Your OpenRouter API Key (FREE Models Available)",
+        "steps": [
+            "1. Go to: https://openrouter.ai/keys",
+            "2. Create a free account or sign in",
+            "3. Click 'Create Key'",
+            "4. Give it a name (e.g., 'ArionXiv')",
+            "5. Copy your API key",
+            "",
+            "Note: OpenRouter provides access to many FREE models!",
+            "      Use it for paper chat with Llama, Gemma, Qwen, etc."
+        ]
+    },
+    "openrouter_model": {
+        "title": "Configure OpenRouter Model",
+        "steps": [
+            "Browse available models at: https://openrouter.ai/models",
+            "",
+            "Popular FREE models:",
+            "  • meta-llama/llama-3.3-70b-instruct:free",
+            "  • google/gemma-2-9b-it:free",
+            "  • qwen/qwen-2.5-72b-instruct:free",
+            "",
+            "Paid models (require credits):",
+            "  • openai/gpt-4o-mini",
+            "  • anthropic/claude-3.5-sonnet",
+            "",
+            "Enter the full model ID as shown on OpenRouter."
         ]
     }
 }
