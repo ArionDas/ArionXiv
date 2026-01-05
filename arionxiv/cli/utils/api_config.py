@@ -117,6 +117,13 @@ class APIConfigManager:
             "description": "For paper chat - access FREE LLMs (Llama, Gemma, Qwen)",
             "url": "https://openrouter.ai/keys",
             "required": False
+        },
+        "openrouter_model": {
+            "name": "OpenRouter Model",
+            "env_var": "OPENROUTER_MODEL",
+            "description": "Model to use with OpenRouter (e.g., openai/gpt-4o-mini, meta-llama/llama-3.3-70b-instruct:free)",
+            "url": "https://openrouter.ai/models",
+            "required": False
         }
     }
     
@@ -251,7 +258,7 @@ class APIConfigManager:
         return self._save_keys()
     
     def load_keys_to_environment(self):
-        """Load stored keys into environment variables"""
+        """Load stored keys into environment variables and refresh clients"""
         self._load_keys()
         for provider, key in self._keys.items():
             if provider.startswith("_"):
@@ -260,6 +267,14 @@ class APIConfigManager:
                 env_var = self.PROVIDERS[provider]["env_var"]
                 if key and not os.getenv(env_var):
                     os.environ[env_var] = key
+        
+        # Refresh OpenRouter client to pick up the loaded keys
+        try:
+            from ...services.llm_inference.openrouter_client import openrouter_client
+            if openrouter_client:
+                openrouter_client.refresh_api_key()
+        except ImportError:
+            pass  # OpenRouter client not available
 
 
 # Global instance

@@ -8,6 +8,7 @@ import json
 import asyncio
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 import time
 import httpx
 from rich.console import Console
@@ -15,7 +16,12 @@ from dotenv import load_dotenv
 
 from .llm_utils import parse_json_response, generate_cache_key
 
+# Load .env from current directory first
 load_dotenv()
+# Also try to load from ~/.arionxiv/.env if it exists
+arionxiv_env = Path.home() / ".arionxiv" / ".env"
+if arionxiv_env.exists():
+    load_dotenv(arionxiv_env)
 
 # ============================================================================
 # LOGGER CONFIGURATION
@@ -145,9 +151,11 @@ class OpenRouterClient:
         return self._api_key
     
     def refresh_api_key(self):
-        """Force refresh the API key from environment"""
+        """Force refresh the API key and model from environment"""
         self._api_key = os.getenv("OPENROUTER_API_KEY")
         self._api_key_checked = True
+        # Also refresh the model in case it was set later
+        self.model = os.getenv("OPENROUTER_MODEL", self.DEFAULT_MODEL)
         return self._api_key is not None
     
     @property

@@ -493,6 +493,37 @@ async def update_daily_settings(request: dict, current_user: dict = Depends(veri
     return {"success": True, "message": "Daily dose settings updated"}
 
 
+@app.post("/daily/run")
+async def run_daily_dose(current_user: dict = Depends(verify_token)):
+    """Manually trigger daily dose generation for the user"""
+    from arionxiv.services.unified_daily_dose_service import daily_dose_service
+    
+    user_id = current_user["user_id"]
+    
+    try:
+        # Execute daily dose generation
+        result = await daily_dose_service.execute_daily_dose(user_id)
+        
+        if result.get("success"):
+            return {
+                "success": True,
+                "message": "Daily dose generated successfully",
+                "papers_count": result.get("papers_count", 0),
+                "dose_id": result.get("dose_id")
+            }
+        else:
+            return {
+                "success": False,
+                "message": result.get("error", "Failed to generate daily dose")
+            }
+    except Exception as e:
+        logger.error(f"Daily dose generation error: {e}")
+        return {
+            "success": False,
+            "message": f"Error generating daily dose: {str(e)}"
+        }
+
+
 # Embeddings cache endpoints - for avoiding re-processing PDFs
 @app.get("/embeddings/{paper_id}")
 async def get_embeddings(paper_id: str, current_user: dict = Depends(verify_token)):
