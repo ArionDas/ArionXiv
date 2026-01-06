@@ -82,7 +82,7 @@ class UnifiedConfigService:
         # RAG System Configuration
         self.RAG_CHUNK_SIZE = 1000
         self.RAG_CHUNK_OVERLAP = 400
-        self.RAG_TOP_K_RESULTS = 5
+        self.RAG_TOP_K_RESULTS = 10  # Increased from 5 for richer context
         self.RAG_TTL_HOURS = 24
         self.RAG_VECTOR_COLLECTION = self.RAG_VECTOR_COLLECTION
         self.RAG_CHAT_COLLECTION = self.RAG_CHAT_COLLECTION

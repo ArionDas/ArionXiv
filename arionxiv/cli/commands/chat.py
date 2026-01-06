@@ -452,6 +452,7 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
             'title': paper_metadata.get('title', paper_title) if paper_metadata else paper_title,
             'authors': paper_metadata.get('authors', []) if paper_metadata else [],
             'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')) if paper_metadata else '',
+            'published': paper_metadata.get('published', '') if paper_metadata else '',
             'full_text': '',  # Not needed when using cached embeddings
             '_cached_embeddings': cached_data['embeddings'],  # Pass cached embeddings
             '_cached_chunks': cached_data['chunks']  # Pass cached chunks
@@ -489,6 +490,7 @@ async def _continue_chat_session(console: Console, colors: Dict, user_name: str,
             'title': paper_metadata.get('title', paper_title),
             'authors': paper_metadata.get('authors', []),
             'abstract': paper_metadata.get('summary', paper_metadata.get('abstract', '')),
+            'published': paper_metadata.get('published', ''),
             'full_text': text_content
         }
     

@@ -135,7 +135,6 @@ Personalize your experience:
     
     tips_content = f"""
 [bold {primary_color}]Pro Tips:[/bold {primary_color}]
-- Use tab completion for commands
 - Run [bold {primary_color}]command --help[/bold {primary_color}] for detailed options
 - Configure preferences once for better results
 - Access all settings with [bold {primary_color}]arionxiv settings[/bold {primary_color}]

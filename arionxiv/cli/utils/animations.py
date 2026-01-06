@@ -441,11 +441,34 @@ def stream_markdown_response(console_instance: Console, text: str, panel_title: 
         colors = get_theme_colors()
         border_style = colors['primary']
     
+    # For complex markdown (tables, code blocks, long responses), skip streaming animation
+    # to avoid visual glitches with partial rendering
+    has_complex_markdown = (
+        '|' in text and '-' in text and  # Tables
+        len([line for line in text.split('\n') if '|' in line]) > 2
+    ) or len(text) > 2000  # Long responses
+    
+    if has_complex_markdown:
+        # Just show a brief thinking indicator then display the final result
+        with Live(console=console_instance, refresh_per_second=10, transient=True) as live:
+            live.update(Panel("Formatting response...", title=panel_title, border_style=border_style))
+            time.sleep(0.3)
+        
+        # Print final panel directly
+        final_panel = Panel(
+            Markdown(text),
+            title=panel_title,
+            border_style=border_style
+        )
+        console_instance.print(final_panel)
+        return
+    
     words = text.split()
     if not words:
         return
     
-    delay = duration / len(words)
+    # Cap the streaming duration for very long responses
+    delay = min(duration / len(words), 0.05)  # Max 50ms per word
     revealed = ""
     
     with Live(console=console_instance, refresh_per_second=30, transient=True) as live:
