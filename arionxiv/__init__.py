@@ -5,7 +5,7 @@ A comprehensive tool for discovering, analyzing, and managing research papers
 from arXiv with AI-powered insights and organizational features.
 """
 
-__version__ = "1.0.28"
+__version__ = "1.0.29"
 __author__ = "Arion Das"
 __email__ = "ariondasad@gmail.com"
 __description__ = "AI-Powered Research Paper Analysis and Management"
