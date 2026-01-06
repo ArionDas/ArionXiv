@@ -216,3 +216,4 @@ arxiv_cache/
 embeddings/
 vector_db/
 chroma_db/
+images/

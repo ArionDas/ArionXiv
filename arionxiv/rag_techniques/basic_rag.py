@@ -978,10 +978,21 @@ class BasicRAG:
             self._current_session_id = session_id
             
             # Create session document with 24-hour TTL
+            # Format authors list for display
+            authors = paper.get('authors', [])
+            if isinstance(authors, list):
+                paper_authors = ', '.join(authors[:5])  # Limit to first 5 authors
+                if len(authors) > 5:
+                    paper_authors += f' et al. ({len(authors)} authors)'
+            else:
+                paper_authors = str(authors) if authors else 'Unknown'
+            
             session_doc = {
                 'session_id': session_id,
                 'paper_id': paper_id,  # Single paper in v1
                 'paper_title': paper.get('title', ''),
+                'paper_authors': paper_authors,
+                'paper_published': paper.get('published', '')[:10] if paper.get('published') else 'Unknown',
                 'user_id': user_id,
                 'created_at': datetime.utcnow(),
                 'last_activity': datetime.utcnow(),
@@ -1059,12 +1070,31 @@ class BasicRAG:
         try:
             colors = get_theme_colors()
             session_id = session.get('session_id')
-            paper_title = session.get('paper_title', 'Unknown Paper')
+            paper_title = session.get('paper_title', paper_info.get('title', 'Unknown Paper'))
             messages = session.get('messages', [])
             
             if not session_id:
                 self.console.print(f"[{colors['error']}]Invalid session: no session_id[/{colors['error']}]")
                 return
+            
+            # Extract and format paper metadata for context
+            # Format authors list for display
+            authors = paper_info.get('authors', session.get('paper_authors', []))
+            if isinstance(authors, list):
+                paper_authors = ', '.join(authors)  # Limit to first 5 authors
+                if len(authors) > 5:
+                    paper_authors += f' et al. ({len(authors)} authors)'
+            else:
+                paper_authors = str(authors) if authors else 'Unknown'
+            
+            # Get published date
+            published = paper_info.get('published', session.get('paper_published', ''))
+            paper_published = published[:10] if published else 'Unknown'
+            
+            # Update session with paper metadata (for use in _chat_with_session)
+            session['paper_title'] = paper_title
+            session['paper_authors'] = paper_authors
+            session['paper_published'] = paper_published
             
             # Clear any previous session embeddings
             self.clear_session_embeddings()
@@ -1213,10 +1243,15 @@ class BasicRAG:
                 return {'success': False, 'error': 'Session not found'}
             
             relevant_chunks = await self.search_similar_documents(message, {'metadata.type': 'paper'})
-            context = "\n\n".join([chunk['text'] for chunk in relevant_chunks[:3]])
+            context = "\n\n".join([chunk['text'] for chunk in relevant_chunks[:10]])  # Increased from 5 to 10 chunks for richer context
             
             # Get conversation history for context
             chat_history = session.get('messages', [])
+            
+            # Get paper metadata for context
+            paper_title = session.get('paper_title', session.get('title', 'Unknown Paper'))
+            paper_authors = session.get('paper_authors', 'Unknown')
+            paper_published = session.get('paper_published', 'Unknown')
             
             # Determine which LLM to use and generate response
             model_display = ""
@@ -1227,7 +1262,14 @@ class BasicRAG:
             # Try OpenRouter for chat, fallback to hosted API
             if self.openrouter_client and self.openrouter_client.is_available:
                 try:
-                    result = await self.openrouter_client.chat(message=message, context=context, history=chat_history)
+                    result = await self.openrouter_client.chat(
+                        message=message, 
+                        context=context, 
+                        history=chat_history,
+                        paper_title=paper_title,
+                        paper_authors=paper_authors,
+                        paper_published=paper_published
+                    )
                     if result.get('success'):
                         response_text, model_display, success = result['response'], result.get('model_display', 'OpenRouter'), True
                     else:

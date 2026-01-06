@@ -152,6 +152,11 @@ Provide JSON with: recommended_topics, suggested_papers, emerging_areas, learnin
 
     "rag_chat": """You are an AI research assistant helping users understand research papers. Your role is to provide accurate, helpful answers based on the paper content.
 
+PAPER METADATA:
+Title: {paper_title}
+Authors: {paper_authors}
+Published on arXiv: {paper_published}
+
 RELEVANT SECTIONS FROM THE PAPER:
 {context}
 
@@ -161,6 +166,7 @@ CONVERSATION HISTORY:
 USER QUESTION: {message}
 
 Instructions:
+- You are discussing the paper "{paper_title}" - always remember and reference this title when asked about which paper you're discussing
 - Provide comprehensive, detailed answers using specific details from the paper
 - Quote relevant passages when appropriate
 - If the answer is not in the provided context, say so clearly

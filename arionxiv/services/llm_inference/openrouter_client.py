@@ -54,6 +54,18 @@ class OpenRouterClient:
     # Free model configurations with context limits
     # Free models on OpenRouter have ":free" suffix
     MODEL_CONFIGS = {
+        "openai/gpt-oss-20b:free": {
+            "max_tokens": 131072,
+            "optimal_completion": 8000,
+            "rpm": 20,
+            "description": "OpenAI GPT-OSS 20B - Free open-source model"
+        },
+        "openai/gpt-oss-120b:free": {
+            "max_tokens": 131072,
+            "optimal_completion": 8000,
+            "rpm": 20,
+            "description": "OpenAI GPT-OSS 120B - Free open-source model"
+        },
         "meta-llama/llama-3.3-70b-instruct:free": {
             "max_tokens": 8192,
             "optimal_completion": 4000,
@@ -84,6 +96,8 @@ class OpenRouterClient:
     
     # Verified free models from OpenRouter API (2026-01-03)
     FALLBACK_MODELS = [
+        "openai/gpt-oss-20b:free",
+        "openai/gpt-oss-120b:free",
         "google/gemma-3-27b-it:free",
         "google/gemma-3-12b-it:free",
         "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -170,6 +184,23 @@ class OpenRouterClient:
     def get_model_display_name(self) -> str:
         """Get a user-friendly model display name"""
         model_name = self.model
+        
+        # Special handling for common model names
+        display_names = {
+            "openai/gpt-oss-20b:free": "OpenAI GPT-OSS 20B",
+            "openai/gpt-oss-120b:free": "OpenAI GPT-OSS 120B",
+            "meta-llama/llama-3.3-70b-instruct:free": "Llama 3.3 70B Instruct",
+            "google/gemma-3-27b-it:free": "Gemma 3 27B",
+            "google/gemma-3-12b-it:free": "Gemma 3 12B",
+            "qwen/qwen3-32b:free": "Qwen 3 32B",
+            "moonshotai/kimi-k2:free": "Kimi K2",
+            "mistralai/mistral-small-3.1-24b-instruct:free": "Mistral Small 3.1 24B",
+        }
+        
+        if model_name in display_names:
+            return display_names[model_name]
+        
+        # Fallback: parse the model name
         if "/" in model_name:
             model_name = model_name.split("/")[-1]
         if ":free" in model_name:
@@ -414,7 +445,7 @@ class OpenRouterClient:
         prompt = format_prompt("comprehensive_paper_analysis", content=content)
         
         system_message = """You are an expert research analyst specializing in academic papers. 
-Provide thorough, accurate analysis with specific details from the paper.
+Provide thorough, accurate analysis with specific details from the paper. Always try to answer the user given question accurately using the content provided.
 Always respond with valid JSON in the exact format requested."""
         
         result = await self.get_json_completion(
@@ -437,9 +468,22 @@ Always respond with valid JSON in the exact format requested."""
         message: str, 
         context: str = "", 
         history: List[Dict[str, str]] = None,
-        system_message: str = None
+        system_message: str = None,
+        paper_title: str = "",
+        paper_authors: str = "",
+        paper_published: str = ""
     ) -> Dict[str, Any]:
-        """Have a conversation with context (for RAG chat)"""
+        """Have a conversation with context (for RAG chat)
+        
+        Args:
+            message: User's question
+            context: Relevant text chunks from the paper
+            history: Conversation history
+            system_message: Optional custom system message
+            paper_title: Title of the paper being discussed
+            paper_authors: Authors of the paper (formatted string)
+            paper_published: Publication date on arXiv
+        """
         from ...prompts import format_prompt
         
         history_text = ""
@@ -453,7 +497,10 @@ Always respond with valid JSON in the exact format requested."""
             "rag_chat",
             context=context,
             history=history_text,
-            message=message
+            message=message,
+            paper_title=paper_title or "Unknown Paper",
+            paper_authors=paper_authors or "Unknown",
+            paper_published=paper_published or "Unknown"
         )
         
         default_system = """You are ArionXiv, an AI research assistant specializing in academic papers.
