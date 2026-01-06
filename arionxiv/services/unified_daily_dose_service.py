@@ -517,7 +517,9 @@ class UnifiedDailyDoseService:
             return self._get_fallback_analysis(paper)
     
     def _parse_analysis_response(self, response: str) -> Dict[str, Any]:
-        """Parse LLM response into structured analysis."""
+        """Parse LLM response into structured analysis with robust section detection."""
+        import re
+        
         sections = {
             "summary": "",
             "key_findings": [],
@@ -528,78 +530,70 @@ class UnifiedDailyDoseService:
         }
         
         try:
-            lines = response.split("\n")
-            current_section = None
-            current_content = []
+            # Define section patterns - order matters for matching priority
+            # Handles: "1. SUMMARY:", "SUMMARY:", "**SUMMARY**:", "Summary:", etc.
+            section_patterns = [
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?SUMMARY(?:\*\*)?[:\s]*', 'summary'),
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?KEY\s*FINDINGS?(?:\*\*)?[:\s]*', 'key_findings'),
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?METHODOLOGY(?:\*\*)?[:\s]*', 'methodology'),
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?SIGNIFICANCE(?:\*\*)?[:\s]*', 'significance'),
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?LIMITATIONS?(?:\*\*)?[:\s]*', 'limitations'),
+                (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?RELEVANCE\s*SCORE(?:\*\*)?[:\s]*', 'relevance_score'),
+            ]
             
-            for line in lines:
-                line_lower = line.lower().strip()
-                
-                if "summary" in line_lower and ":" in line:
-                    if current_section:
-                        sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "summary"
-                    current_content = [line.split(":", 1)[-1].strip()]
-                elif "key finding" in line_lower or "findings" in line_lower:
-                    if current_section:
-                        sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "key_findings"
-                    current_content = []
-                elif "methodology" in line_lower and ":" in line:
-                    if current_section:
-                        if current_section == "key_findings":
-                            sections[current_section] = current_content
-                        else:
-                            sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "methodology"
-                    current_content = [line.split(":", 1)[-1].strip()]
-                elif "significance" in line_lower and ":" in line:
-                    if current_section:
-                        if current_section == "key_findings":
-                            sections[current_section] = current_content
-                        else:
-                            sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "significance"
-                    current_content = [line.split(":", 1)[-1].strip()]
-                elif "limitation" in line_lower and ":" in line:
-                    if current_section:
-                        if current_section == "key_findings":
-                            sections[current_section] = current_content
-                        else:
-                            sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "limitations"
-                    current_content = [line.split(":", 1)[-1].strip()]
-                elif "relevance" in line_lower and "score" in line_lower:
-                    if current_section:
-                        if current_section == "key_findings":
-                            sections[current_section] = current_content
-                        else:
-                            sections[current_section] = "\n".join(current_content).strip()
-                    # Try to extract score
-                    import re
-                    score_match = re.search(r'(\d+)', line)
-                    if score_match:
-                        sections["relevance_score"] = min(10, max(1, int(score_match.group(1))))
-                    current_section = None
-                    current_content = []
-                elif current_section:
-                    # Handle bullet points for key findings
-                    if current_section == "key_findings":
-                        cleaned = line.strip().lstrip("-*").strip()
-                        if cleaned:
-                            current_content.append(cleaned)
-                    else:
-                        current_content.append(line)
+            # Find all section positions
+            section_positions = []
+            for pattern, section_name in section_patterns:
+                for match in re.finditer(pattern, response, re.IGNORECASE | re.MULTILINE):
+                    section_positions.append((match.end(), section_name, match.start()))
             
-            # Save last section
-            if current_section:
-                if current_section == "key_findings":
-                    sections[current_section] = current_content
+            # Sort by position in text
+            section_positions.sort(key=lambda x: x[0])
+            
+            # Extract content for each section
+            for i, (start_pos, section_name, header_start) in enumerate(section_positions):
+                # Find end position (start of next section or end of text)
+                if i + 1 < len(section_positions):
+                    end_pos = section_positions[i + 1][2]  # header_start of next section
                 else:
-                    sections[current_section] = "\n".join(current_content).strip()
+                    end_pos = len(response)
+                
+                content = response[start_pos:end_pos].strip()
+                
+                if section_name == 'key_findings':
+                    # Parse key findings as list - handle numbered items and bullet points
+                    findings = []
+                    # Split by numbered items (1., 2., etc.) or bullet points
+                    finding_pattern = r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)'
+                    items = re.split(finding_pattern, content)
+                    for item in items:
+                        cleaned = item.strip()
+                        # Skip items that look like section headers
+                        if cleaned and not re.match(r'^(?:METHODOLOGY|SIGNIFICANCE|LIMITATIONS?|RELEVANCE)', cleaned, re.IGNORECASE):
+                            findings.append(cleaned)
+                    sections['key_findings'] = findings if findings else [content] if content else []
+                    
+                elif section_name == 'relevance_score':
+                    # Extract numeric score
+                    score_match = re.search(r'(\d+)', content)
+                    if score_match:
+                        sections['relevance_score'] = min(10, max(1, int(score_match.group(1))))
+                        
+                elif section_name == 'limitations':
+                    # Handle limitations as text, but clean up any list formatting
+                    # Check if it's a list format
+                    if re.search(r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)', content):
+                        items = re.split(r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)', content)
+                        cleaned_items = [item.strip() for item in items if item.strip()]
+                        sections['limitations'] = cleaned_items if cleaned_items else content
+                    else:
+                        sections['limitations'] = content
+                else:
+                    # Store as plain text for other sections
+                    sections[section_name] = content
             
-            # If parsing failed, use raw response as summary
-            if not sections["summary"]:
+            # If no sections were found, try fallback parsing
+            if not sections["summary"] and not sections["key_findings"]:
                 sections["summary"] = response[:500] + "..." if len(response) > 500 else response
             
         except Exception as e:
