@@ -175,6 +175,13 @@ class OpenRouterClient:
     @property
     def is_available(self) -> bool:
         """Check if the client is properly configured"""
+        # Re-check environment if not found - .env may have been loaded after initialization
+        if self._api_key is None:
+            load_dotenv()  # Try loading .env again
+            arionxiv_env = Path.home() / ".arionxiv" / ".env"
+            if arionxiv_env.exists():
+                load_dotenv(arionxiv_env)
+            self.refresh_api_key()
         return self.api_key is not None
     
     def get_model_name(self) -> str:

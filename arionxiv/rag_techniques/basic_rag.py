@@ -283,12 +283,7 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
         model_cache_name = f"models--{self.model_name.replace('/', '--')}"
         is_cached = (cache_dir / model_cache_name).exists()
         
-        if is_cached:
-            # Model is cached on disk - quick load message
-            self._console.print(
-                f"[dim {colors['primary']}]Loading embedding model from cache...[/dim {colors['primary']}]"
-            )
-        else:
+        if not is_cached:
             # First time - show download message
             self._console.print(
                 f"[dim {colors['primary']}]Downloading embedding model: {self.model_name}[/dim {colors['primary']}]"
