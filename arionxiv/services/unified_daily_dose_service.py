@@ -541,12 +541,17 @@ class UnifiedDailyDoseService:
                 (r'(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?RELEVANCE\s*SCORE(?:\*\*)?[:\s]*', 'relevance_score'),
             ]
             
-            # Find all section positions
-            section_positions = []
+            # Find all section positions, keeping only earliest match per section
+            best_positions = {}
             for pattern, section_name in section_patterns:
                 for match in re.finditer(pattern, response, re.IGNORECASE | re.MULTILINE):
-                    section_positions.append((match.end(), section_name, match.start()))
+                    start = match.start()
+                    end = match.end()
+                    existing = best_positions.get(section_name)
+                    if existing is None or start < existing[2]:
+                        best_positions[section_name] = (end, section_name, start)
             
+            section_positions = list(best_positions.values())
             # Sort by position in text
             section_positions.sort(key=lambda x: x[0])
             
@@ -565,11 +570,13 @@ class UnifiedDailyDoseService:
                     findings = []
                     # Split by numbered items (1., 2., etc.) or bullet points
                     finding_pattern = r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)'
-                    items = re.split(finding_pattern, content)
+                    raw_items = re.split(finding_pattern, content)
+                    # Filter out empty or whitespace-only items explicitly
+                    items = [item for item in raw_items if item and item.strip()]
                     for item in items:
                         cleaned = item.strip()
                         # Skip items that look like section headers
-                        if cleaned and not re.match(r'^(?:METHODOLOGY|SIGNIFICANCE|LIMITATIONS?|RELEVANCE)', cleaned, re.IGNORECASE):
+                        if not re.match(r'^(?:METHODOLOGY|SIGNIFICANCE|LIMITATIONS?|RELEVANCE)', cleaned, re.IGNORECASE):
                             findings.append(cleaned)
                     sections['key_findings'] = findings if findings else [content] if content else []
                     
@@ -580,14 +587,11 @@ class UnifiedDailyDoseService:
                         sections['relevance_score'] = min(10, max(1, int(score_match.group(1))))
                         
                 elif section_name == 'limitations':
-                    # Handle limitations as text, but clean up any list formatting
-                    # Check if it's a list format
-                    if re.search(r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)', content):
-                        items = re.split(r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)', content)
-                        cleaned_items = [item.strip() for item in items if item.strip()]
-                        sections['limitations'] = cleaned_items if cleaned_items else content
-                    else:
-                        sections['limitations'] = content
+                    # Handle limitations - always store as string for consistency
+                    # Clean up any list formatting markers but keep as single text block
+                    cleaned_content = re.sub(r'(?:^|\n)\s*(?:\d+[\.\)]\s*|[-•*]\s*)', ' ', content)
+                    cleaned_content = ' '.join(cleaned_content.split())  # Normalize whitespace
+                    sections['limitations'] = cleaned_content.strip() if cleaned_content.strip() else content
                 else:
                     # Store as plain text for other sections
                     sections[section_name] = content

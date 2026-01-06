@@ -305,8 +305,10 @@ async def _display_paper_analysis(paper: dict, colors: dict):
         if not text:
             return text
         import re
-        # Remove markdown bold/italic markers
-        text = text.replace("**", "").replace("*", "").replace("__", "")
+        # Remove markdown bold/italic markers using targeted regex (preserves math notation like A*B)
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # Remove **bold**
+        text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'\1', text)  # Remove *italic* but not **
+        text = re.sub(r'__(.+?)__', r'\1', text)  # Remove __bold__
         # Remove any remaining section headers that might have leaked through
         text = re.sub(r'^(?:\d+\.\s*)?(?:SUMMARY|KEY\s*FINDINGS?|METHODOLOGY|SIGNIFICANCE|LIMITATIONS?|RELEVANCE\s*SCORE)[:\s]*', '', text, flags=re.IGNORECASE | re.MULTILINE)
         # Remove leading/trailing whitespace
@@ -330,7 +332,7 @@ async def _display_paper_analysis(paper: dict, colors: dict):
                     # Remove leading numbers that might have leaked through (e.g., "1. " at start)
                     cleaned = re.sub(r'^[\d]+[\.\)]\s*', '', cleaned)
                     if cleaned:
-                        console.print(f"  {cleaned}")
+                        console.print(f"   - {cleaned}")
         else:
             console.print(f"   {clean_text(key_findings)}")
         console.print()
@@ -347,18 +349,11 @@ async def _display_paper_analysis(paper: dict, colors: dict):
         console.print(f"[bold {colors['primary']}]Significance[/]")
         console.print(f"   {significance}\n")
     
-    # Limitations section - handle as list or text
+    # Limitations section - displayed as text
     limitations = analysis.get("limitations", "")
     if limitations:
         console.print(f"[bold {colors['primary']}]Limitations[/]")
-        if isinstance(limitations, list):
-            for lim in limitations:
-                cleaned = clean_text(lim)
-                if cleaned:
-                    console.print(f"   • {cleaned}")
-        else:
-            console.print(f"   {clean_text(limitations)}")
-        console.print()
+        console.print(f"   {clean_text(limitations)}\n")
     
     # Relevance score with color coding
     score = analysis.get("relevance_score", 5)
