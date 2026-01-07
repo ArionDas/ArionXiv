@@ -297,21 +297,26 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
             import os
             os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
             
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=self._console,
-                transient=True
-            ) as progress:
-                loading_msg = "Loading model from cache..." if is_cached else "Downloading and initializing embedding model..."
-                task = progress.add_task(
-                    f"[bold {colors['primary']}]{loading_msg}[/bold {colors['primary']}]", 
-                    total=None
-                )
+            if is_cached:
+                # Model is on disk - load silently (fast operation, no spinner needed)
                 loaded_model = SentenceTransformer(self.model_name, trust_remote_code=True)
                 self._dimension = loaded_model.get_sentence_embedding_dimension()
-                # Store in global cache
                 _GLOBAL_MODEL_CACHE[self.model_name] = loaded_model
+            else:
+                # First time download - show progress spinner
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=self._console,
+                    transient=True
+                ) as progress:
+                    task = progress.add_task(
+                        f"[bold {colors['primary']}]Downloading and initializing embedding model...[/bold {colors['primary']}]", 
+                        total=None
+                    )
+                    loaded_model = SentenceTransformer(self.model_name, trust_remote_code=True)
+                    self._dimension = loaded_model.get_sentence_embedding_dimension()
+                    _GLOBAL_MODEL_CACHE[self.model_name] = loaded_model
             
             # Re-enable progress bars for other operations
             os.environ.pop('HF_HUB_DISABLE_PROGRESS_BARS', None)
