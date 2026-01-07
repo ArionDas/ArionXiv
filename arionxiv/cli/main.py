@@ -281,7 +281,7 @@ class ThemedGroup(click.Group):
             for cmd_name in sorted(subgroup.list_commands(ctx)):
                 cmd = subgroup.get_command(ctx, cmd_name)
                 if cmd and not cmd.hidden:
-                    help_text = cmd.get_short_help_str(limit=50)
+                    help_text = cmd.get_short_help_str(limit=500)
                     error_console.print(f"  [{colors['primary']}]{cmd_name}[/{colors['primary']}]  {help_text}")
             error_console.print()
             error_console.print(f"Run [{colors['primary']}]arionxiv {parent_cmd} --help[/{colors['primary']}] for more information.")
@@ -292,7 +292,7 @@ class ThemedGroup(click.Group):
             for cmd_name in sorted(self.list_commands(ctx)):
                 cmd = self.get_command(ctx, cmd_name)
                 if cmd and not cmd.hidden:
-                    help_text = cmd.get_short_help_str(limit=200)
+                    help_text = cmd.get_short_help_str(limit=500)
                     error_console.print(f"  [{colors['primary']}]{cmd_name}[/{colors['primary']}]  {help_text}")
             error_console.print()
             error_console.print(f"Run [{colors['primary']}]arionxiv --help[/{colors['primary']}] for more information.")
