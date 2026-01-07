@@ -424,6 +424,3 @@ async def _show_preferences_menu(user_id: str):
         await _configure_schedule(user_id)
     elif choice == "5":
         await _reset_preferences(user_id)
-
-if __name__ == "__main__":
-    preferences_command()

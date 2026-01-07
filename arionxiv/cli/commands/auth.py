@@ -363,7 +363,3 @@ def auth_command(login: bool, logout: bool, info: bool):
             auth_interface.show_session_info()
     
     asyncio.run(_handle_auth())
-
-
-if __name__ == "__main__":
-    login_command()

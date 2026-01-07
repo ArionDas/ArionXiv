@@ -869,11 +869,11 @@ def papers_config():
                 
                 # Confirm deletion
                 papers_to_delete = [user_papers[i].get("title", "Unknown")[:30] for i in valid_indices]
-                console.print(f"\n[bold {colors['warning']}]Papers to delete:[/bold {colors['warning']}]")
+                console.print(f"\n[bold {colors['primary']}]Papers to delete:[/bold {colors['primary']}]")
                 for title in papers_to_delete:
                     console.print(f"  - {title}")
                 
-                if Confirm.ask(f"\n[bold {colors['warning']}]Confirm deletion?[/bold {colors['warning']}]", default=False):
+                if Confirm.ask(f"\n[bold {colors['red']}]Confirm deletion?[/bold {colors['red']}]", default=False):
                     deleted_count = 0
                     for idx in valid_indices:
                         paper = user_papers[idx]
