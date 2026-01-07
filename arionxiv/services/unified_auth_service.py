@@ -9,17 +9,26 @@ import re
 import jwt
 import os
 import hmac
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, TYPE_CHECKING
 from datetime import datetime, timedelta
 import logging
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 from bson import ObjectId
 
 from .unified_database_service import unified_database_service
 
+# FastAPI imports - optional, only needed for server endpoints
+try:
+    from fastapi import HTTPException, Depends
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    FASTAPI_AVAILABLE = True
+    security = HTTPBearer()
+except ImportError:
+    FASTAPI_AVAILABLE = False
+    HTTPException = Exception  # Fallback for raising errors
+    security = None
+
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
 
 
 class UnifiedAuthenticationService:
@@ -319,17 +328,16 @@ class UnifiedAuthenticationService:
         except jwt.InvalidTokenError as e:
             return {"valid": False, "error": f"Invalid token: {str(e)}"}
     
-    async def get_current_user(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    async def get_current_user(self, credentials) -> Dict[str, Any]:
         """
         Get current user from token
 
         Args:
-            credentials (HTTPAuthorizationCredentials): Authorization credentials containing the JWT token
+            credentials: Authorization credentials containing the JWT token
         
         Returns:
             Dict[str, Any]: Current user information extracted from the token
         """
-
         result = self.verify_token(credentials.credentials)
         
         if not result["valid"]:
@@ -444,5 +452,6 @@ __all__ = [
     'login_user',
     'get_user_settings',
     'update_user_settings',
-    'security'
+    'security',
+    'FASTAPI_AVAILABLE'
 ]
