@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Maximum papers a user can save
 MAX_USER_PAPERS = 10
 
-@click.command()
+@click.command(hidden=True)  # Hidden command - accessed via search menu
 @click.argument('query')  # Changed from paper_id to query
 @click.option('--analysis-type', '-t', type=click.Choice(['summary', 'detailed', 'technical', 'insights']), 
               default='summary', help='Type of analysis to perform')

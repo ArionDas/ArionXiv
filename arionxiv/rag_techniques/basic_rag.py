@@ -535,20 +535,20 @@ class BasicRAG:
                 "Chat feature is temporarily unavailable.\n\n"
                 "To enable this feature, please configure your Gemini API key:\n"
                 "  arionxiv settings\n\n"
-                "If you encounter persistent issues, please report via:\n"
-                "  arionxiv feedback"
+                "If you encounter persistent issues, please report at:\n"
+                "  https://github.com/ArionDas/ArionXiv/issues"
             )
         elif not ML_DEPENDENCIES_AVAILABLE:
             return (
                 "Chat feature encountered an issue.\n\n"
-                "Please try again later or report via:\n"
-                "  arionxiv feedback"
+                "Please try again later or report at:\n"
+                "  https://github.com/ArionDas/ArionXiv/issues"
             )
         else:
             return (
                 "Chat feature is temporarily unavailable.\n\n"
-                "Please try again later or report via:\n"
-                "  arionxiv feedback"
+                "Please try again later or report at:\n"
+                "  https://github.com/ArionDas/ArionXiv/issues"
             )
     
     async def get_embeddings(self, texts: Union[str, List[str]]) -> List[List[float]]:
