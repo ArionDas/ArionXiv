@@ -26,18 +26,26 @@ echo "export PATH=\"\$PATH:$(python3 -c 'import sysconfig; print(sysconfig.get_p
 
 ## Getting Started
 
-### First Run
+### First Run - Start with Welcome
+
+**The first command you should always run is:**
 
 ```bash
-arionxiv
+arionxiv welcome
 ```
 
-On first run, register or login to your account:
+This will display the welcome screen and guide you through the initial setup.
+
+### Create an Account
+
+**First-time users must create an account to use ArionXiv:**
 
 ```bash
-arionxiv register   # Create a new account
+arionxiv register   # Create a new account (required for first-time users)
 arionxiv login      # Login to existing account
 ```
+
+Once registered, you can access all features including paper search, AI analysis, chat, and personalized recommendations.
 
 That's it. No API keys or configuration required.
 
@@ -60,11 +68,11 @@ arionxiv search "reinforcement learning" --max-results 20
 
 ### 2. Paper Analysis
 
-AI-powered deep analysis of research papers.
+AI-powered deep analysis of research papers. Access this feature by searching for a paper and selecting "Analyze" from the results menu.
 
 ```bash
-arionxiv analyze 2301.00001
-arionxiv analyze 2301.00001 --detailed
+arionxiv search "transformer architecture"
+# Select a paper → Choose "Analyze"
 ```
 
 <!-- Screenshot: analysis output -->
@@ -153,18 +161,17 @@ Available themes: cyan, green, magenta, yellow, red, blue, white
 
 | Command | Description |
 |---------|-------------|
+| `arionxiv welcome` | Welcome screen (run this first!) |
 | `arionxiv` | Main menu |
-| `arionxiv search <query>` | Search for papers |
-| `arionxiv fetch <paper_id>` | Download paper PDF |
-| `arionxiv analyze <paper_id>` | AI analysis |
-| `arionxiv chat [paper_id]` | Chat with papers |
-| `arionxiv daily` | Daily recommendations |
-| `arionxiv trending` | Trending topics |
-| `arionxiv library` | Saved papers |
-| `arionxiv settings` | Configuration |
-| `arionxiv login` | Authenticate |
-| `arionxiv register` | Create account |
-| `arionxiv session` | Check auth status |
+| `arionxiv search <query>` | Search for papers (with analyze option) |
+| `arionxiv chat [paper_id]` | Interactive RAG chat with papers |
+| `arionxiv daily` | Daily personalized recommendations |
+| `arionxiv trending` | Discover trending topics |
+| `arionxiv library` | View saved papers |
+| `arionxiv settings` | Configuration menu |
+| `arionxiv register` | Create new account |
+| `arionxiv login` | Login to existing account |
+| `arionxiv session` | Check authentication status |
 | `arionxiv --help` | Show all commands |
 
 ---
@@ -174,48 +181,26 @@ Available themes: cyan, green, magenta, yellow, red, blue, white
 ### Settings Commands
 
 ```bash
-arionxiv settings show      # View all settings
-arionxiv settings theme     # Change color theme
-arionxiv settings api       # Configure optional API keys (Gemini, Groq, HuggingFace)
-arionxiv settings prefs     # Research preferences
-arionxiv settings daily     # Daily dose schedule
-arionxiv settings papers    # Manage saved papers
+arionxiv settings show         # View all settings
+arionxiv settings theme        # Change color theme
+arionxiv settings api          # Configure optional API keys (Gemini, Groq, HuggingFace)
+arionxiv settings preferences  # Research preferences
+arionxiv settings daily        # Daily dose schedule
+arionxiv settings papers       # Manage saved papers
 ```
 
-### Self-Hosting (Optional)
+### Self-Hosting (For Developers Only)
 
-If you want to run your own backend instead of using the hosted service:
+> **Note:** Regular users do NOT need to self-host. ArionXiv automatically connects to our hosted backend service. This section is only for developers who want to run their own backend infrastructure.
+
+If you want to use your own APIs and LLM providers, set the following using command "arionxiv settings api":
 
 | Variable | Description |
 |----------|-------------|
-| `MONGODB_URI` | MongoDB connection string |
-| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key for LLM |
 | `JWT_SECRET_KEY` | Authentication secret |
 | `GEMINI_API_KEY` | Google Gemini embeddings (optional) |
 | `GROQ_API_KEY` | Fallback LLM provider (optional) |
-
----
-
-## Optional Dependencies
-
-```bash
-pip install arionxiv[advanced-pdf]  # OCR and table extraction
-pip install arionxiv[ml]            # Local embeddings
-pip install arionxiv[all]           # All extras
-```
-
----
-
-## Daily Dose Automation
-
-### GitHub Actions
-
-1. Fork the repository
-2. Add secrets in Settings > Secrets:
-   - `MONGODB_URI`
-   - `OPENROUTER_API_KEY`
-   - `JWT_SECRET_KEY`
-3. The workflow runs hourly and processes users based on their scheduled time
 
 ---
 

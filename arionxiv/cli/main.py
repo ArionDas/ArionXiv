@@ -28,6 +28,8 @@ from .commands.library import library_command
 from .commands.trending import trending_command
 from .commands.settings_unified import settings
 from .commands.auth import auth_command, auth_interface, login_command, logout_command, register_command, session_command
+from .commands.analyze import analyze_command  # Hidden command for internal use
+
 from .commands.welcome import welcome, show_logo_and_features
 from .ui.logo import display_logo, display_welcome_message, display_startup_info
 from .ui.theme import create_themed_console, print_header, style_text, get_theme_colors
@@ -286,11 +288,11 @@ class ThemedGroup(click.Group):
         else:
             # Show main commands
             logger.debug("Showing main commands")
-            error_console.print(f"[bold white]Available commands:[/bold white]")
+            error_console.print(f"[bold {colors['primary']}]Available commands:[/bold {colors['primary']}]")
             for cmd_name in sorted(self.list_commands(ctx)):
                 cmd = self.get_command(ctx, cmd_name)
                 if cmd and not cmd.hidden:
-                    help_text = cmd.get_short_help_str(limit=50)
+                    help_text = cmd.get_short_help_str(limit=200)
                     error_console.print(f"  [{colors['primary']}]{cmd_name}[/{colors['primary']}]  {help_text}")
             error_console.print()
             error_console.print(f"Run [{colors['primary']}]arionxiv --help[/{colors['primary']}] for more information.")
@@ -392,6 +394,8 @@ async def _handle_main_flow():
 # Register all commands
 cli.add_command(welcome, name="welcome")
 cli.add_command(search_command, name="search")
+cli.add_command(analyze_command, name="analyze")  # Hidden - accessed via search menu
+
 cli.add_command(chat_command, name="chat")
 cli.add_command(daily_command, name="daily")
 cli.add_command(library_command, name="library")

@@ -65,7 +65,7 @@ async def _search_papers(keywords: str, category: Optional[str], author: Optiona
     """Execute the paper search"""
     
     logger.info(f"Starting paper search: keywords='{keywords}', category={category}, author={author}")
-    left_to_right_reveal(console, f"Search: [bold {colors['primary']}]{keywords}[/bold {colors['primary']}]", style="bold", duration=1.0)
+    left_to_right_reveal(console, f"Search: {keywords}", style=f"bold {colors['primary']}", duration=1.0)
     
     with Progress(
         TextColumn(f"[bold {colors['primary']}]Searching arXiv...[/bold {colors['primary']}]"),
@@ -127,10 +127,10 @@ async def _display_papers_table_animated(papers):
     def create_table_with_rows(num_rows: int) -> Table:
         table = create_themed_table("Results")
         table.expand = True
-        table.add_column("#", style=f"bold {colors['primary']}", width=4)
-        table.add_column("Title", style=f"bold {colors['primary']}")
-        table.add_column("Authors", style=f"bold {colors['primary']}", width=30)
-        table.add_column("Date", style=f"bold {colors['primary']}", width=12)
+        table.add_column("#", style="bold white", width=4)
+        table.add_column("Title", style="white")
+        table.add_column("Authors", style="white", width=30)
+        table.add_column("Date", style="white", width=12)
         
         for i in range(num_rows):
             paper = papers[i]
@@ -186,24 +186,21 @@ def _show_selection_menu(papers):
     
     # Show actions
     left_to_right_reveal(console, f"\nActions:", style=f"bold {colors['primary']}", duration=0.5)
-    left_to_right_reveal(console, f"1. Fetch (download PDF)", style=f"bold {colors['primary']}", duration=0.5)
-    left_to_right_reveal(console, f"2. Analyze (AI analysis)", style=f"bold {colors['primary']}", duration=0.5)
-    left_to_right_reveal(console, f"3. Chat (discuss the paper)", style=f"bold {colors['primary']}", duration=0.5)
-    left_to_right_reveal(console, f"4. Exit", style=f"bold {colors['primary']}", duration=0.5)
+    left_to_right_reveal(console, f"1. Analyze (AI analysis)", style=f"bold {colors['primary']}", duration=0.5)
+    left_to_right_reveal(console, f"2. Chat (discuss the paper)", style=f"bold {colors['primary']}", duration=0.5)
+    left_to_right_reveal(console, f"3. Exit", style=f"bold {colors['primary']}", duration=0.5)
     
     console.print()
-    action = Prompt.ask(f"[bold {colors['primary']}]Action[/bold {colors['primary']}]", choices=["1", "2", "3", "4"], default="4")
+    action = Prompt.ask(f"[bold {colors['primary']}]Action[/bold {colors['primary']}]", choices=["1", "2", "3"], default="3")
     
     if action == "1":
-        left_to_right_reveal(console, f"\nFetching paper...", style=f"bold {colors['primary']}")
-        subprocess.run([sys.executable, "-m", "arionxiv", "fetch", paper_id])
-    elif action == "2":
         left_to_right_reveal(console, f"\nAnalyzing paper...", style=f"bold {colors['primary']}")
+        # Use subprocess to call the analyze command (registered as hidden command)
         subprocess.run([sys.executable, "-m", "arionxiv", "analyze", paper_id])
-    elif action == "3":
+    elif action == "2":
         left_to_right_reveal(console, f"\nStarting chat...", style=f"bold {colors['primary']}")
         subprocess.run([sys.executable, "-m", "arionxiv", "chat", "--paper-id", paper_id])
-    elif action == "4":
+    elif action == "3":
         show_command_suggestions(console, context='search')
 
 

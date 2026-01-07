@@ -160,7 +160,7 @@ def show_settings(detailed: bool):
         # Quick actions
         console.print(f"\n{style_text('Quick Actions:', 'primary')}")
         console.print(f"- {style_text('arionxiv settings theme', 'primary')} - Change color theme")
-        console.print(f"- {style_text('arionxiv settings prefs', 'primary')} - Configure preferences")
+        console.print(f"- {style_text('arionxiv settings preferences', 'primary')} - Configure preferences")
         console.print(f"- {style_text('arionxiv settings daily', 'primary')} - Daily dose settings")
     
     asyncio.run(_show())
