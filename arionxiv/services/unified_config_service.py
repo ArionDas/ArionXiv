@@ -285,16 +285,19 @@ class UnifiedConfigService:
         
         # Suppress specific noisy loggers in normal mode
         if not self.debug_mode:
-            # Hide HTTP client messages
-            logging.getLogger("httpx").setLevel(logging.WARNING)
-            logging.getLogger("aiohttp").setLevel(logging.WARNING)
+            # Hide HTTP client messages - CRITICAL means no logs shown
+            logging.getLogger("httpx").setLevel(logging.CRITICAL)
+            logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
             
             # Hide model loading messages
-            logging.getLogger("transformers").setLevel(logging.WARNING)
-            logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+            logging.getLogger("transformers").setLevel(logging.CRITICAL)
+            logging.getLogger("sentence_transformers").setLevel(logging.CRITICAL)
             
             # Hide embedding provider messages
-            logging.getLogger("embedding_service").setLevel(logging.WARNING)
+            logging.getLogger("embedding_service").setLevel(logging.CRITICAL)
+            
+            # Hide ALL arionxiv internal logs from CLI users - they see rich UI instead
+            logging.getLogger("arionxiv").setLevel(logging.CRITICAL)
     
     def get_logger(self, name: str) -> structlog.BoundLogger:
         """Get a configured logger"""

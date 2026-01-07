@@ -212,7 +212,7 @@ class AuthInterface:
                     print_error(self.console, f"{style_text('Password is required', 'error')}")
                     continue
                 
-                password_confirm = getpass.getpass(f"{style_text('Confirm Password:', 'primary')} ")
+                password_confirm = getpass.getpass(f"Confirm Password: ")
                 
                 if password != password_confirm:
                     print_error(self.console, f"{style_text('Passwords do not match', 'error')}")

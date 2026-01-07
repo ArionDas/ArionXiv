@@ -512,7 +512,44 @@ class BasicRAG:
             self._current_embedding_provider = self._embedding_providers[0]
             logger.info(f"Using embedding provider: {self._current_embedding_provider.get_name()}")
         else:
-            logger.error("No embedding providers available!")
+            # No providers available - this will be handled gracefully in chat
+            logger.debug("No embedding providers available - chat will show user-friendly message")
+    
+    def is_embedding_available(self) -> bool:
+        """Check if any embedding provider is available for chat"""
+        # Trigger lazy initialization
+        _ = self.embedding_providers
+        return len(self._embedding_providers) > 0
+    
+    def get_embedding_unavailable_message(self) -> str:
+        """Get user-friendly message explaining why embeddings are unavailable"""
+        # Check if Gemini API key is configured
+        gemini_configured = False
+        if API_CONFIG_AVAILABLE and api_config_manager:
+            gemini_configured = api_config_manager.is_configured("gemini")
+        else:
+            gemini_configured = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+        
+        if not ML_DEPENDENCIES_AVAILABLE and not gemini_configured:
+            return (
+                "Chat feature is temporarily unavailable.\n\n"
+                "To enable this feature, please configure your Gemini API key:\n"
+                "  arionxiv settings\n\n"
+                "If you encounter persistent issues, please report via:\n"
+                "  arionxiv feedback"
+            )
+        elif not ML_DEPENDENCIES_AVAILABLE:
+            return (
+                "Chat feature encountered an issue.\n\n"
+                "Please try again later or report via:\n"
+                "  arionxiv feedback"
+            )
+        else:
+            return (
+                "Chat feature is temporarily unavailable.\n\n"
+                "Please try again later or report via:\n"
+                "  arionxiv feedback"
+            )
     
     async def get_embeddings(self, texts: Union[str, List[str]]) -> List[List[float]]:
         """Get embeddings with automatic fallback"""
@@ -951,12 +988,24 @@ class BasicRAG:
             
             colors = get_theme_colors()
             
+            # Check if cached embeddings are available or if we can generate new ones
+            cached_embeddings = paper.get('_cached_embeddings')
+            cached_chunks = paper.get('_cached_chunks')
+            
+            # If no cached embeddings, check if embedding providers are available
+            if not cached_embeddings and not self.is_embedding_available():
+                # Show graceful error message
+                self.console.print(Panel(
+                    f"[{colors['warning']}]{self.get_embedding_unavailable_message()}[/{colors['warning']}]",
+                    title=f"[bold {colors['warning']}]Feature Unavailable[/bold {colors['warning']}]",
+                    border_style=f"bold {colors['warning']}"
+                ))
+                return
+            
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
             # Check if cached embeddings were passed (already fetched from API/DB)
-            cached_embeddings = paper.get('_cached_embeddings')
-            cached_chunks = paper.get('_cached_chunks')
             if cached_embeddings:
                 # Load cached embeddings directly into session memory
                 await self._load_embeddings_from_cache(cached_embeddings, cached_chunks)
@@ -965,12 +1014,20 @@ class BasicRAG:
                 # Generate embeddings and store in memory - with progress bar
                 paper_text = self._extract_paper_text(paper)
                 if paper_text:
-                    await self.add_document_to_index_with_progress(
+                    success = await self.add_document_to_index_with_progress(
                         paper_id,
                         paper_text,
                         {'type': 'paper', 'title': paper.get('title', '')},
                         console=self.console
                     )
+                    if not success:
+                        # Embedding failed - show graceful message
+                        self.console.print(Panel(
+                            f"[{colors['warning']}]{self.get_embedding_unavailable_message()}[/{colors['warning']}]",
+                            title=f"[bold {colors['warning']}]Feature Unavailable[/bold {colors['warning']}]",
+                            border_style=f"bold {colors['warning']}"
+                        ))
+                        return
             
             # Create unique session ID
             import uuid
@@ -1077,6 +1134,20 @@ class BasicRAG:
                 self.console.print(f"[{colors['error']}]Invalid session: no session_id[/{colors['error']}]")
                 return
             
+            # Check if cached embeddings are available or if we can generate new ones
+            cached_embeddings = paper_info.get('_cached_embeddings')
+            cached_chunks = paper_info.get('_cached_chunks')
+            
+            # If no cached embeddings, check if embedding providers are available
+            if not cached_embeddings and not self.is_embedding_available():
+                # Show graceful error message
+                self.console.print(Panel(
+                    f"[{colors['warning']}]{self.get_embedding_unavailable_message()}[/{colors['warning']}]",
+                    title=f"[bold {colors['warning']}]Feature Unavailable[/bold {colors['warning']}]",
+                    border_style=f"bold {colors['warning']}"
+                ))
+                return
+            
             # Extract and format paper metadata for context
             # Format authors list for display
             authors = paper_info.get('authors', session.get('paper_authors', []))
@@ -1099,9 +1170,7 @@ class BasicRAG:
             # Clear any previous session embeddings
             self.clear_session_embeddings()
             
-            # Check if cached embeddings were passed (from API)
-            cached_embeddings = paper_info.get('_cached_embeddings')
-            cached_chunks = paper_info.get('_cached_chunks')
+            # Use cached embeddings if available, otherwise generate new ones
             if cached_embeddings:
                 # Use pre-loaded cached embeddings directly
                 await self._load_embeddings_from_cache(cached_embeddings, cached_chunks)
@@ -1111,12 +1180,20 @@ class BasicRAG:
                 paper_text = self._extract_paper_text(paper_info)
                 if paper_text:
                     paper_id = paper_info.get('arxiv_id') or paper_info.get('id')
-                    await self.add_document_to_index_with_progress(
+                    success = await self.add_document_to_index_with_progress(
                         paper_id,
                         paper_text,
                         {'type': 'paper', 'title': paper_title},
                         console=self.console
                     )
+                    if not success:
+                        # Embedding failed - show graceful message
+                        self.console.print(Panel(
+                            f"[{colors['warning']}]{self.get_embedding_unavailable_message()}[/{colors['warning']}]",
+                            title=f"[bold {colors['warning']}]Feature Unavailable[/bold {colors['warning']}]",
+                            border_style=f"bold {colors['warning']}"
+                        ))
+                        return
             
             self._current_session_id = session_id
             # Store session in memory so _chat_with_session can find it
