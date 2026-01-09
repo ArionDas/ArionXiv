@@ -270,11 +270,11 @@ Full Paper Content:
     # Cleanup downloaded files after analysis
     try:
         from ...utils.file_cleanup import file_cleanup_manager
-        left_to_right_reveal(console, "\nCleaning up downloaded files...", style=colors['primary'])
+        left_to_right_reveal(console, "\nCleaning up downloaded files...", style=f"bold {colors['primary']}")
         if file_cleanup_manager.cleanup_paper_files(clean_paper_id):
-            left_to_right_reveal(console, "Files cleaned up successfully", style=colors['primary'])
+            left_to_right_reveal(console, "Files cleaned up successfully", style=f"bold {colors['primary']}")
     except Exception as cleanup_error:
-        left_to_right_reveal(console, f"File cleanup warning: {cleanup_error}", style=colors['warning'])
+        left_to_right_reveal(console, f"File cleanup warning: {cleanup_error}", style=f"bold {colors['warning']}")
 
 def _build_analysis_prompt(analysis_type: str, metadata: dict, paper_text: str) -> str:
     """Build analysis prompt based on type"""

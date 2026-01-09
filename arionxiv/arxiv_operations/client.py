@@ -3,21 +3,59 @@ import arxiv
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+from urllib.error import URLError
+from socket import timeout as SocketTimeout
 
 logger = logging.getLogger(__name__)
+
+# ANSI escape codes for bold red text
+BOLD_RED = "\033[1;31m"
+RESET = "\033[0m"
+
+API_TIMEOUT_SECONDS = 30
+
+class ArxivAPITimeoutError(Exception):
+    """Custom exception for arXiv API timeout"""
+    pass
+
+def print_timeout_error():
+    """Print bold red timeout error message to terminal"""
+    print(f"\n{BOLD_RED}arXiv API is currently unavailable (request timed out after {API_TIMEOUT_SECONDS} seconds).{RESET}")
+    print(f"{BOLD_RED}Please try again later.{RESET}\n")
 
 class ArxivClient:
     """Client for interacting with Arxiv API"""
     
     def __init__(self):
-        self.client = arxiv.Client()
+        self.client = arxiv.Client(
+            page_size=100,
+            delay_seconds=3.0,
+            num_retries=3
+        )
         self.default_page_size = 100
         self.max_results = 100
+        self.timeout = API_TIMEOUT_SECONDS
     
     # Short words to skip in title searches (arXiv doesn't index these well)
     SKIP_WORDS = {'a', 'an', 'the', 'is', 'are', 'be', 'to', 'of', 'in', 'on', 
                   'at', 'by', 'for', 'and', 'or', 'but', 'not', 'all', 'you', 
                   'it', 'its', 'as', 'so', 'if', 'do', 'no', 'up', 'we', 'my'}
+    
+    def _execute_with_timeout(self, search: arxiv.Search) -> List[Any]:
+        """Execute arXiv search with timeout handling"""
+        import urllib.request
+        
+        original_timeout = urllib.request.socket.getdefaulttimeout()
+        try:
+            urllib.request.socket.setdefaulttimeout(self.timeout)
+            return list(self.client.results(search))
+        except (URLError, SocketTimeout, TimeoutError) as e:
+            if "timed out" in str(e).lower() or isinstance(e, (SocketTimeout, TimeoutError)):
+                print_timeout_error()
+                raise ArxivAPITimeoutError(f"arXiv API request timed out after {self.timeout} seconds")
+            raise
+        finally:
+            urllib.request.socket.setdefaulttimeout(original_timeout)
     
     def search_papers(self, query: str, max_results: int = None, sort_by=arxiv.SortCriterion.Relevance) -> List[Dict[str, Any]]:
         """Search for papers on Arxiv with relevance scoring"""
@@ -52,7 +90,7 @@ class ArxivClient:
             )
             
             papers = []
-            for result in self.client.results(search):
+            for result in self._execute_with_timeout(search):
                 paper_data = {
                     "arxiv_id": result.entry_id.split('/')[-1],
                     "title": result.title,
@@ -77,6 +115,8 @@ class ArxivClient:
             
             logger.info(f"Found {len(papers)} papers for query: {query}")
             return papers
+        except ArxivAPITimeoutError:
+            return []
         except Exception as e:
             logger.error(f"Error searching papers: {str(e)}")
             return []
@@ -122,7 +162,7 @@ class ArxivClient:
         try:
             search = arxiv.Search(id_list=[arxiv_id])
             
-            for result in self.client.results(search):
+            for result in self._execute_with_timeout(search):
                 paper_data = {
                     "arxiv_id": result.entry_id.split('/')[-1],
                     "title": result.title,
@@ -141,6 +181,8 @@ class ArxivClient:
                 }
                 return paper_data
             
+            return None
+        except ArxivAPITimeoutError:
             return None
         except Exception as e:
             logger.error(f"Error fetching paper {arxiv_id}: {str(e)}")
@@ -167,7 +209,7 @@ class ArxivClient:
             )
             
             papers = []
-            for result in self.client.results(search):
+            for result in self._execute_with_timeout(search):
                 # Filter by date
                 if result.published and result.published.replace(tzinfo=None) >= cutoff_date:
                     paper_data = {
@@ -189,6 +231,8 @@ class ArxivClient:
             
             logger.info(f"Found {len(papers)} recent papers in category: {category}")
             return papers
+        except ArxivAPITimeoutError:
+            return []
         except Exception as e:
             logger.error(f"Error fetching recent papers: {str(e)}")
             return []
