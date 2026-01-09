@@ -111,14 +111,14 @@ class AuthInterface:
                 ).strip()
                 
                 if not identifier:
-                    print_error(self.console, f"{style_text('Username/Email is required', 'error')}")
+                    self.console.print(f"\n{style_text('Username/Email is required', 'error')}")
                     continue
                 
                 self.console.print(f"\n[bold]{style_text('Password:', 'primary')}[/bold]")
                 password = getpass.getpass(f"> ")
                 
                 if not password:
-                    print_error(self.console, f"{style_text('Password is required', 'error')}")
+                    self.console.print(f"\n{style_text('Password is required', 'error')}")
                     continue
                 
                 primary_color = get_theme_colors()["primary"]
@@ -140,41 +140,43 @@ class AuthInterface:
                         return user
                     else:
                         logger.error("Failed to create session after successful login")
-                        print_error(self.console, f"{style_text('Failed to create session', 'error')}")
+                        self.console.print(f"\n{style_text('Failed to create session', 'error')}")
                         return None
                 else:
                     attempts += 1
                     remaining = max_attempts - attempts
                     error_msg = result.get('message') or result.get('error', 'Login failed')
                     logger.warning(f"Login failed for {identifier}: {error_msg}")
-                    print_error(self.console, f"{style_text(error_msg, 'error')}")
+                    self.console.print(f"\n{style_text(error_msg, 'error')}")
                     
                     if remaining > 0:
-                        print_warning(self.console, f"You have {remaining} attempts remaining")
+                        self.console.print(f"\n{style_text(f'You have {remaining} attempts remaining', 'warning')}")
                     else:
-                        print_error(self.console, f"{style_text('Maximum login attempts exceeded', 'error')}")
+                        self.console.print(f"\n{style_text('Maximum login attempts exceeded', 'error')}")
                         break
                 
             except APIClientError as e:
                 attempts += 1
                 remaining = max_attempts - attempts
                 logger.warning(f"API login error: {e.message}")
-                print_error(self.console, f"{style_text(e.message, 'error')}")
+                self.console.print(f"\n{style_text(e.message, 'error')}")
                 if remaining > 0:
-                    print_warning(self.console, f"You have {remaining} attempts remaining")
+                    self.console.print(f"\n{style_text(f'You have {remaining} attempts remaining', 'warning')}")
             except KeyboardInterrupt:
                 self.console.print(f"\n{style_text('Login cancelled', 'warning')}")
                 return None
             except Exception as e:
                 logger.error(f"Login error: {str(e)}", exc_info=True)
-                print_error(self.console, f"Login error: {str(e)}")
+                self.console.print(f"\n{style_text(f'Login error: {str(e)}', 'error')}")
                 return None
         
         return None
     
     async def _register_flow(self) -> Optional[Dict[str, Any]]:
         """Handle user registration via hosted API"""
-        self.console.print(f"\n{style_text('Create ArionXiv Account', 'primary')}")
+        colors = get_theme_colors()
+        primary_color = colors["primary"]
+        self.console.print(f"\n{style_text('Create ArionXiv Account', f'bold {primary_color}')}")
         self.console.print("-" * 40)
         
         try:
@@ -190,7 +192,7 @@ class AuthInterface:
                 ).strip()
                 
                 if not email:
-                    print_error(self.console, f"{style_text('Email is required', 'error')}")
+                    self.console.print(f"\n{style_text('Email is required', 'error')}")
                     continue
                 break
             
@@ -200,7 +202,7 @@ class AuthInterface:
                 ).strip()
                 
                 if not user_name:
-                    print_error(self.console, f"{style_text('Username is required', 'error')}")
+                    self.console.print(f"\n{style_text('Username is required', 'error')}")
                     continue
                 break
             
@@ -209,13 +211,13 @@ class AuthInterface:
                 password = getpass.getpass("> ")
                 
                 if not password:
-                    print_error(self.console, f"{style_text('Password is required', 'error')}")
+                    self.console.print(f"\n{style_text('Password is required', 'error')}")
                     continue
                 
                 password_confirm = getpass.getpass(f"Confirm Password: ")
                 
                 if password != password_confirm:
-                    print_error(self.console, f"{style_text('Passwords do not match', 'error')}")
+                    self.console.print(f"\n{style_text('Passwords do not match', 'error')}")
                     continue
                 
                 break
@@ -253,17 +255,17 @@ class AuthInterface:
                     return user
                 else:
                     logger.error("Failed to create session for new user")
-                    print_error(self.console, style_text("Failed to create session", "error"))
+                    self.console.print(f"\n{style_text('Failed to create session', 'error')}")
                     return None
             else:
                 error_msg = result.get("message") or result.get("error", "Registration failed")
                 logger.warning(f"Registration failed for {email}: {error_msg}")
-                print_error(self.console, error_msg)
+                self.console.print(f"\n{style_text(error_msg, 'error')}")
                 return None
             
         except APIClientError as e:
             logger.warning(f"API registration error: {e.message}")
-            print_error(self.console, f"{style_text(e.message, 'error')}")
+            self.console.print(f"\n{style_text('API registration error', 'error')}")
             return None
         except KeyboardInterrupt:
             logger.debug("Registration cancelled by user")
@@ -271,7 +273,7 @@ class AuthInterface:
             return None
         except Exception as e:
             logger.error(f"Registration error: {str(e)}", exc_info=True)
-            print_error(self.console, f"{style_text('Registration error:', 'error')} {str(e)}")
+            self.console.print(f"\n{style_text('Registration error:', 'error')} {str(e)}")
             return None
     
     def show_session_info(self):
@@ -292,7 +294,7 @@ class AuthInterface:
             self.console.print(f"Expires: {style_text(session['expires'], 'primary')} ({style_text(session['days_remaining'], 'primary')} days remaining)")
             self.console.print(f"Last activity: {style_text(session['last_activity'], 'primary')}")
         else:
-            print_warning(self.console, f"{style_text('No active session', 'warning')}")
+            self.console.print(f"\n{style_text('No active session', 'warning')}")
     
     async def logout(self):
         """Logout current user"""
@@ -310,7 +312,7 @@ class AuthInterface:
             left_to_right_reveal(self.console, f"Goodbye, [bold]{style_text(user_name, 'primary')}[/bold]!", duration=0.5)
         else:
             logger.debug("Logout called but no active session")
-            print_warning(self.console, f"{style_text('No active session to logout', 'warning')}")
+            self.console.print(f"\n{style_text('No active session to logout', 'warning')}")
 
 # Global auth interface instance
 auth_interface = AuthInterface()
