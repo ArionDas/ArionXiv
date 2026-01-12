@@ -1,10 +1,11 @@
 <p align="center">
   <img
-    src="https://github.com/user-attachments/assets/cf79dfe7-a4c0-4a9c-8c2f-c0b663049457"
+    src="https://github.com/user-attachments/assets/45fd1111-202b-4efc-9b37-b310c3f2ce86"
     alt="image"
     style="max-width:100%; height:auto;"
   />
 </p>
+
 
 > [!NOTE]
 Let's face it, nobody has the bandwidth, nor the patience to go through entire papers every single day. <br>
