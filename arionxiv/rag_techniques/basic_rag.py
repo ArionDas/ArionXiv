@@ -286,10 +286,10 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
         if not is_cached:
             # First time - show download message
             self._console.print(
-                f"[dim]Downloading embedding model: {self.model_name}[/dim]"
+                f"[dim {colors['primary']}]Downloading embedding model: {self.model_name}[/dim {colors['primary']}]"
             )
             self._console.print(
-                f"[dim](First run downloads ~120MB, uses HuggingFace cache)[/dim]"
+                f"[dim {colors['primary']}](First run downloads ~120MB, uses HuggingFace cache)[/dim {colors['primary']}]"
             )
         
         try:
