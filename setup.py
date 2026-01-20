@@ -75,7 +75,7 @@ extras_require['all'] = [
 
 setup(
     name="arionxiv",
-    version="1.0.38",
+    version="1.0.39",
     author="Arion Das",
     author_email="ariondasad@gmail.com",
     description="AI-Powered Research Paper Analysis and Management System",
