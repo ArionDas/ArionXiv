@@ -868,12 +868,12 @@ def papers_config():
                     return
                 
                 # Confirm deletion
-                papers_to_delete = [user_papers[i].get("title", "Unknown")[:30] for i in valid_indices]
+                papers_to_delete = [user_papers[i].get("title", "Unknown") for i in valid_indices]
                 console.print(f"\n[bold {colors['primary']}]Papers to delete:[/bold {colors['primary']}]")
                 for title in papers_to_delete:
                     console.print(f"  - {title}")
                 
-                if Confirm.ask(f"\n[bold {colors['red']}]Confirm deletion?[/bold {colors['red']}]", default=False):
+                if Confirm.ask(f"\n[bold {colors['error']}]Confirm deletion?[/bold {colors['error']}]", default=False):
                     deleted_count = 0
                     for idx in valid_indices:
                         paper = user_papers[idx]
@@ -885,7 +885,7 @@ def papers_config():
                                     deleted_count += 1
                             except APIClientError as e:
                                 logging.error(f"Failed to remove paper from library: {e}", exc_info=True)
-                                console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}")
+                                console.print(f"[bold {colors['error']}]Failed to remove paper from library.[/bold {colors['error']}]")
                     
                     print_success(console, f"Deleted {deleted_count} paper(s) from your library.")
                 else:
