@@ -92,7 +92,7 @@ async def _run_daily_dose():
             print_error(console, "Could not determine user ID. Please login again.")
             return
         
-        console.print(f"\n[dim {colors['primary']}]Fetching papers and generating personalized summary...[/dim]")
+        console.print(f"\n[dim]Fetching papers and generating personalized summary...[/dim]")
         
         # Progress callback for real-time updates
         def progress_callback(step: str, detail: str = ""):

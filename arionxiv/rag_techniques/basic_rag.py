@@ -286,10 +286,10 @@ class GraniteDoclingEmbeddingProvider(EmbeddingProvider):
         if not is_cached:
             # First time - show download message
             self._console.print(
-                f"[dim {colors['primary']}]Downloading embedding model: {self.model_name}[/dim {colors['primary']}]"
+                f"[dim]Downloading embedding model: {self.model_name}[/dim]"
             )
             self._console.print(
-                f"[dim {colors['primary']}](First run downloads ~120MB, uses HuggingFace cache)[/{colors['primary']}]"
+                f"[dim](First run downloads ~120MB, uses HuggingFace cache)[/dim]"
             )
         
         try:
@@ -1229,7 +1229,7 @@ class BasicRAG:
                     content = msg.get('content', '')
                     # Truncate long messages for display
                     display_content = content[:150] + "..." if len(content) > 150 else content
-                    self.console.print(f"[dim {colors['primary']}]{role}: {display_content}[/dim {colors['primary']}]")
+                    self.console.print(f"[dim]{role}: {display_content}[/dim]")
             
             try:
                 await self._run_chat_loop(session_id)
