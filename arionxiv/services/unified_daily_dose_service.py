@@ -80,15 +80,24 @@ class UnifiedDailyDoseService:
                     if result.get("success"):
                         settings = result.get("settings", {})
                         daily_dose = settings.get("daily_dose", {})
-                        preferences = settings.get("preferences", {})
+                        
+                        # Keywords: check daily_dose first, then top-level settings (which now merges preferences)
+                        keywords = daily_dose.get("keywords") or settings.get("keywords", [])
+                        
+                        # Categories: check top-level settings (merged from preferences)
+                        categories = settings.get("categories", ["cs.AI", "cs.LG"])
+                        
+                        # Max papers: check daily_dose first, then top-level
+                        max_papers = daily_dose.get("max_papers") or settings.get("max_papers_per_day", 5)
+                        
                         return {
                             "success": True,
                             "settings": {
-                                "keywords": daily_dose.get("keywords", preferences.get("keywords", [])),
-                                "max_papers": min(daily_dose.get("max_papers", 5), self.max_papers),
+                                "keywords": keywords,
+                                "max_papers": min(max_papers, self.max_papers),
                                 "scheduled_time": daily_dose.get("scheduled_time", None),
                                 "enabled": daily_dose.get("enabled", False),
-                                "categories": preferences.get("categories", ["cs.AI", "cs.LG"])
+                                "categories": categories
                             }
                         }
             except Exception as api_err:

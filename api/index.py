@@ -346,16 +346,49 @@ async def remove_from_library(arxiv_id: str, current_user: dict = Depends(verify
 # Settings endpoints
 @app.get("/settings")
 async def get_settings(current_user: dict = Depends(verify_token)):
+    """Get user settings - merges 'settings' and 'preferences' for compatibility"""
     db = get_db()
     user = db.users.find_one({"_id": ObjectId(current_user["user_id"])})
-    return {"success": True, "settings": user.get("settings", {})}
+    
+    # Merge settings and preferences for backwards compatibility
+    # Preferences takes priority as that's where the CLI saves data
+    settings = user.get("settings", {})
+    preferences = user.get("preferences", {})
+    
+    # Merge with preferences taking priority
+    merged = {
+        **settings,
+        "categories": preferences.get("categories", settings.get("categories", ["cs.AI", "cs.LG"])),
+        "keywords": preferences.get("keywords", settings.get("keywords", [])),
+        "authors": preferences.get("authors", settings.get("authors", [])),
+        "exclude_keywords": preferences.get("exclude_keywords", settings.get("exclude_keywords", [])),
+        "min_relevance_score": preferences.get("min_relevance_score", settings.get("min_relevance_score", 0.2)),
+        "max_papers_per_day": preferences.get("max_papers_per_day", settings.get("max_papers_per_day", 10)),
+        "daily_dose": preferences.get("daily_dose", settings.get("daily_dose", {})),
+        "preferences": preferences  # Include full preferences for reference
+    }
+    
+    return {"success": True, "settings": merged}
 
 @app.put("/settings")
 async def update_settings(settings: dict, current_user: dict = Depends(verify_token)):
+    """Update user settings - saves to both 'settings' and 'preferences' for compatibility"""
     db = get_db()
+    
+    # Extract preference-related fields to save to preferences as well
+    pref_fields = ["categories", "keywords", "authors", "exclude_keywords", 
+                   "min_relevance_score", "max_papers_per_day", "daily_dose"]
+    
+    update_doc = {"settings": settings}
+    
+    # Also update preferences for fields that belong there
+    for field in pref_fields:
+        if field in settings:
+            update_doc[f"preferences.{field}"] = settings[field]
+    
     db.users.update_one(
         {"_id": ObjectId(current_user["user_id"])},
-        {"$set": {"settings": settings}}
+        {"$set": update_doc}
     )
     return {"success": True, "message": "Settings updated"}
 
