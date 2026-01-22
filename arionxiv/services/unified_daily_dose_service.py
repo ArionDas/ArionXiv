@@ -267,7 +267,12 @@ class UnifiedDailyDoseService:
                     "papers_count": 0
                 }
             
-            log_progress("Settings loaded", f"Keywords: {len(keywords)}, Categories: {len(categories)}, Max papers: {max_papers}")
+            # Show actual keywords and categories being used
+            keywords_str = ", ".join(keywords[:5]) + ("..." if len(keywords) > 5 else "") if keywords else "None"
+            categories_str = ", ".join(categories[:5]) + ("..." if len(categories) > 5 else "") if categories else "None"
+            log_progress("Settings loaded", f"Max papers: {max_papers}")
+            log_progress("Keywords", keywords_str)
+            log_progress("Categories", categories_str)
             
             # Step 2: Search arXiv for papers
             log_progress("Searching arXiv", "Finding papers matching your keywords...")
@@ -401,7 +406,7 @@ class UnifiedDailyDoseService:
             
             logger.info(f"Normalized keywords: {unique_keywords}")
             
-            # Build search query
+            # Build search query using title (ti:) and abstract (abs:) for more targeted results
             query_parts = []
             
             # Add category filter
@@ -409,15 +414,19 @@ class UnifiedDailyDoseService:
                 cat_query = " OR ".join([f"cat:{cat}" for cat in categories])
                 query_parts.append(f"({cat_query})")
             
-            # Add keyword filter - don't use quotes for single words
+            # Add keyword filter - search in title OR abstract for more relevant matches
             if unique_keywords:
-                # For single words, just use the word; for phrases, use quotes
+                # Build keyword query: for each keyword, search in title OR abstract
                 kw_parts = []
                 for kw in unique_keywords:
+                    # Use ti: (title) and abs: (abstract) prefixes for targeted search
+                    # This avoids matching papers that just mention the keyword in passing
                     if ' ' in kw:
-                        kw_parts.append(f'"{kw}"')  # Phrase
+                        # Phrase - use quotes
+                        kw_parts.append(f'(ti:"{kw}" OR abs:"{kw}")')
                     else:
-                        kw_parts.append(kw)  # Single word
+                        # Single word
+                        kw_parts.append(f'(ti:{kw} OR abs:{kw})')
                 kw_query = " OR ".join(kw_parts)
                 query_parts.append(f"({kw_query})")
             
@@ -437,12 +446,72 @@ class UnifiedDailyDoseService:
             import arxiv
             papers = arxiv_client.search_papers(
                 query=full_query,
-                max_results=min(max_papers * 2, 20),  # Fetch extra to allow filtering
+                max_results=min(max_papers * 5, 50),  # Fetch more for strict filtering
                 sort_by=arxiv.SortCriterion.SubmittedDate  # Most recent first!
             )
             
-            # Filter to most recent papers and limit
-            papers = papers[:max_papers]
+            # Define off-topic domains to filter out (common cross-listed but irrelevant)
+            OFF_TOPIC_TERMS = {
+                'molecular', 'molecule', 'chemical', 'chemistry', 'drug', 'protein',
+                'biology', 'biological', 'genome', 'genomic', 'medical', 'clinical',
+                'video generation', 'video synthesis', 'image generation', 'diffusion model',
+                'autonomous driving', 'robot', 'robotic', 'embodied'
+            }
+            
+            def is_off_topic(paper: Dict[str, Any]) -> bool:
+                """Check if paper title contains off-topic domain terms."""
+                title = paper.get('title', '').lower()
+                for term in OFF_TOPIC_TERMS:
+                    if term in title:
+                        return True
+                return False
+            
+            # CRITICAL: Filter by PRIMARY category - the first category is the primary one
+            # This prevents cross-listed papers (e.g., chemistry papers in cs.LG) from appearing
+            def paper_has_primary_category(paper: Dict[str, Any]) -> bool:
+                """Check if paper's PRIMARY category matches user's categories."""
+                paper_categories = paper.get('categories', [])
+                if not paper_categories:
+                    return False
+                # Primary category is the first one listed
+                primary_category = paper_categories[0]
+                return primary_category in categories
+            
+            # Filter: must have matching primary category AND not be off-topic
+            category_filtered = [p for p in papers if paper_has_primary_category(p) and not is_off_topic(p)]
+            logger.info(f"Category + topic filter: {len(papers)} -> {len(category_filtered)} papers")
+            
+            # Post-filter: Score papers by how many keywords they match
+            # This helps prioritize papers that are more relevant
+            def score_paper_relevance(paper: Dict[str, Any]) -> int:
+                """Score paper by number of keyword matches in title and abstract."""
+                title = paper.get('title', '').lower()
+                abstract = paper.get('abstract', '').lower()
+                
+                score = 0
+                for kw in unique_keywords:
+                    kw_lower = kw.lower()
+                    # Title matches are worth more (x3)
+                    if kw_lower in title:
+                        score += 3
+                    # Abstract matches
+                    if kw_lower in abstract:
+                        score += 1
+                return score
+            
+            # Sort by relevance score (descending), then limit
+            papers_with_scores = [(p, score_paper_relevance(p)) for p in category_filtered]
+            papers_with_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Only keep papers with at least 1 keyword match
+            filtered_papers = [p for p, score in papers_with_scores if score > 0]
+            
+            # If strict filtering yields nothing, fall back to category-filtered only
+            if not filtered_papers:
+                filtered_papers = category_filtered if category_filtered else papers
+            
+            # Limit to max_papers
+            papers = filtered_papers[:max_papers]
             
             return papers
             
@@ -645,22 +714,9 @@ class UnifiedDailyDoseService:
         start_time: datetime
     ) -> Dict[str, Any]:
         """
-        Store daily analysis in MongoDB, replacing any existing analysis for today.
+        Store daily analysis - saves to hosted API first, falls back to local MongoDB.
         """
         try:
-            if unified_database_service.db is None:
-                await unified_database_service.connect_mongodb()
-            
-            # Get today's date boundaries
-            today = datetime.utcnow().date()
-            start_of_day = datetime.combine(today, datetime.min.time())
-            end_of_day = datetime.combine(today, datetime.max.time())
-            
-            # Delete any existing daily dose for this user (replace logic)
-            await unified_database_service.db.daily_dose.delete_many({
-                "user_id": user_id
-            })
-            
             # Prepare the daily dose document
             successful_papers = [p for p in processed_papers if p.get("analysis") and not p.get("error")]
             
@@ -679,24 +735,24 @@ class UnifiedDailyDoseService:
             all_text = " ".join([p["paper"].get("title", "") for p in successful_papers])
             top_keywords = self._extract_top_keywords(all_text)
             
-            daily_dose_doc = {
-                "user_id": user_id,
-                "generated_at": datetime.utcnow(),
-                "date": today.isoformat(),
-                "papers": [
-                    {
-                        "arxiv_id": p["paper"]["arxiv_id"],
-                        "title": p["paper"]["title"],
-                        "authors": p["paper"]["authors"],
-                        "abstract": p["paper"]["abstract"],
-                        "categories": p["paper"]["categories"],
-                        "published": p["paper"]["published"],
-                        "pdf_url": p["paper"]["pdf_url"],
-                        "analysis": p["analysis"],
-                        "relevance_score": p["analysis"].get("relevance_score", 5) if p["analysis"] else 0
-                    }
-                    for p in processed_papers
-                ],
+            # Build papers list for storage
+            papers_list = []
+            for p in processed_papers:
+                paper_doc = {
+                    "arxiv_id": p["paper"]["arxiv_id"],
+                    "title": p["paper"]["title"],
+                    "authors": p["paper"]["authors"],
+                    "abstract": p["paper"]["abstract"],
+                    "categories": p["paper"]["categories"],
+                    "published": p["paper"]["published"],
+                    "pdf_url": p["paper"]["pdf_url"],
+                    "analysis": p["analysis"],
+                    "relevance_score": p["analysis"].get("relevance_score", 5) if p["analysis"] else 0
+                }
+                papers_list.append(paper_doc)
+            
+            dose_data = {
+                "papers": papers_list,
                 "summary": {
                     "total_papers": len(processed_papers),
                     "successful_analyses": len(successful_papers),
@@ -704,14 +760,52 @@ class UnifiedDailyDoseService:
                     "categories_covered": list(categories_covered),
                     "top_keywords": top_keywords
                 },
-                "execution_time_seconds": (datetime.utcnow() - start_time).total_seconds(),
+                "execution_time_seconds": (datetime.utcnow() - start_time).total_seconds()
+            }
+            
+            # Try to save to hosted API first (so --dose can fetch it)
+            try:
+                from ..cli.utils.api_client import api_client
+                if api_client.is_authenticated():
+                    result = await api_client.save_daily_dose(dose_data)
+                    if result.get("success"):
+                        logger.info(f"Stored daily dose via API for user {user_id}")
+                        return {
+                            "success": True,
+                            "analysis_id": result.get("dose_id", "api")
+                        }
+            except Exception as api_err:
+                logger.debug(f"API daily dose save failed, trying local DB: {api_err}")
+            
+            # Fall back to local MongoDB
+            if unified_database_service.db is None:
+                try:
+                    await unified_database_service.connect_mongodb()
+                except Exception:
+                    # No local DB available, but API save may have worked
+                    logger.warning("No local MongoDB available for daily dose storage")
+                    return {"success": True, "analysis_id": "local-unavailable"}
+            
+            # Get today's date
+            today = datetime.utcnow().date()
+            
+            # Delete any existing daily dose for this user (replace logic)
+            await unified_database_service.db.daily_dose.delete_many({
+                "user_id": user_id
+            })
+            
+            daily_dose_doc = {
+                "user_id": user_id,
+                "generated_at": datetime.utcnow(),
+                "date": today.isoformat(),
+                **dose_data,
                 "created_at": datetime.utcnow()
             }
             
             # Insert new daily dose
             result = await unified_database_service.db.daily_dose.insert_one(daily_dose_doc)
             
-            logger.info(f"Stored daily dose for user {user_id}, analysis_id: {result.inserted_id}")
+            logger.info(f"Stored daily dose locally for user {user_id}, analysis_id: {result.inserted_id}")
             
             return {
                 "success": True,

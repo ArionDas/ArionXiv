@@ -477,6 +477,34 @@ async def get_daily_analysis(current_user: dict = Depends(verify_token)):
     return {"success": True, "dose": dose}
 
 
+@app.put("/daily")
+async def save_daily_dose(dose: dict, current_user: dict = Depends(verify_token)):
+    """Save daily dose from local CLI execution"""
+    db = get_db()
+    user_id = current_user["user_id"]
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    # Delete any existing daily dose for this user today
+    db.daily_dose.delete_many({
+        "user_id": user_id,
+        "date": today
+    })
+    
+    # Prepare the document
+    dose_doc = {
+        "user_id": user_id,
+        "date": today,
+        "generated_at": datetime.utcnow(),
+        "papers": dose.get("papers", []),
+        "summary": dose.get("summary", {}),
+        "execution_time_seconds": dose.get("execution_time_seconds", 0),
+        "created_at": datetime.utcnow()
+    }
+    
+    result = db.daily_dose.insert_one(dose_doc)
+    return {"success": True, "dose_id": str(result.inserted_id)}
+
+
 @app.get("/daily/settings")
 async def get_daily_settings(current_user: dict = Depends(verify_token)):
     """Get user's daily dose settings"""

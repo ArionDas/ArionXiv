@@ -461,6 +461,15 @@ class ArionXivAPIClient:
         )
         return await self._handle_response(response)
     
+    async def save_daily_dose(self, dose: Dict[str, Any]) -> Dict[str, Any]:
+        """Save daily dose results to hosted API"""
+        response = await self.httpx_client.put(
+            "/daily",
+            json=dose,
+            headers=self._get_headers()
+        )
+        return await self._handle_response(response)
+    
     # =========================================================================
     # EMBEDDINGS CACHE ENDPOINTS
     # =========================================================================
